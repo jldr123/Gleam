@@ -1,0 +1,92 @@
+@import 'tailwindcss';
+
+/* Day: warm paper. Evening (18:00 to 04:00, or forced in settings): candlelit dark. */
+:root {
+  --bg: #f7f1e8;
+  --surface: #fffaf3;
+  --surface-2: #efe5d7;
+  --line: rgb(80 50 20 / 0.1);
+  --text: #2b211a;
+  --muted: #7d6b5c;
+  --faint: #b3a291;
+  --accent: #c8743a;
+  --accent-ink: #fff8ef;
+  --glow: rgb(232 160 92 / 0.35);
+  color-scheme: light;
+}
+
+:root.evening {
+  --bg: #1a1410;
+  --surface: #241c16;
+  --surface-2: #2f251d;
+  --line: rgb(255 220 180 / 0.08);
+  --text: #f5ebde;
+  --muted: #a8968a;
+  --faint: #66574b;
+  --accent: #eaa25e;
+  --accent-ink: #2a1703;
+  --glow: rgb(234 162 94 / 0.28);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --font-sans: 'Manrope', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: 'Fraunces', ui-serif, Georgia, serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  transition:
+    background-color 1.2s ease,
+    color 1.2s ease;
+}
+
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+input,
+textarea {
+  font: inherit;
+  /* 16px+ stops iOS zooming into focused fields. */
+  font-size: max(16px, 1em);
+}
+
+textarea {
+  resize: none;
+}
+
+.safe-top {
+  padding-top: max(env(safe-area-inset-top), 16px);
+}
+
+.safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 20px);
+}
+
+/* The soft glow behind the home screen. */
+.glow {
+  background: radial-gradient(60% 45% at 50% 30%, var(--glow), transparent 70%);
+}
