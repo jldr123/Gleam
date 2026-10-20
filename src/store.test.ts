@@ -61,3 +61,52 @@ describe('saving a reflection', () => {
     expect(s().entries[thu].starred).toBe(true)
   })
 })
+
+describe('after a heavy stretch', () => {
+  const heavyWeek = () => {
+    const today = s().today()
+    useStore.setState({ entries: Object.fromEntries([1, 2, 4].map((i) => [addDays(today, -i), entry(addDays(today, -i), [], 1)])) })
+  }
+
+  it('offers the gentle card on a hard night and remembers it only locally', () => {
+    heavyWeek()
+    s().startReflection()
+    s().setMood(2)
+    expect(s().draft?.care).toBe('offer')
+    expect(s().careShownOn).toBe(s().today())
+    s().setMood(4)
+    expect(s().draft?.care).toBe('none')
+  })
+
+  it('saves a quick check-in as mood and note only', () => {
+    heavyWeek()
+    s().startReflection()
+    s().setGratitude(0, { text: 'Something' })
+    s().setMood(1)
+    s().updateDraft({ care: 'checkin', moodNote: 'Tired.', promptAnswer: 'x' })
+    s().saveDraft()
+    const saved = s().entries[s().today()]
+    expect(saved).toMatchObject({ mood: 1, moodNote: 'Tired.', gratitudes: [], promptAnswer: '', promptId: 'checkin' })
+    expect(JSON.stringify(saved)).not.toContain('care')
+  })
+})
+
+describe('lighter nights', () => {
+  it('keeps one gratitude on a normal night', () => {
+    s().updateSettings({ light: true })
+    s().startReflection()
+    s().setMood(4)
+    s().setGratitude(0, { text: 'Tea' })
+    s().setGratitude(1, { text: 'Toast' })
+    s().saveDraft()
+    expect(s().entries[s().today()].gratitudes).toEqual([{ text: 'Tea', because: '' }])
+  })
+})
+
+describe('monthly check answers', () => {
+  it('are kept locally by date', () => {
+    s().answerHelp('2026-10-20', 'sortOf')
+    s().answerHelp('2026-10-20', 'yes')
+    expect(s().helpChecks).toEqual([{ date: '2026-10-20', answer: 'sortOf' }])
+  })
+})

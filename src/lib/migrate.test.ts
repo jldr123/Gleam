@@ -1,3 +1,4 @@
+import { entry } from '../test/fixtures'
 import { migrate } from './migrate'
 
 const v1 = {
@@ -49,7 +50,7 @@ describe('migrate from version 1', () => {
   })
 
   it('keeps settings and drops the old draft', () => {
-    expect(out.settings).toEqual({ name: 'Joe', theme: 'dark', rhythm: { mode: 'nightly', nights: [0, 3] } })
+    expect(out.settings).toEqual({ name: 'Joe', theme: 'dark', rhythm: { mode: 'nightly', nights: [0, 3] }, reminderTime: '21:30', light: false })
     expect(out.draft).toBeNull()
   })
 
@@ -60,6 +61,11 @@ describe('migrate from version 1', () => {
 
   it('copes with empty storage', () => {
     expect(migrate(undefined, 0).entries).toEqual({})
+  })
+
+  it('skips the first-run screens for people who already reflected', () => {
+    expect(out.onboarded).toBe(true)
+    expect(migrate({ entries: {} }, 3).onboarded).toBe(false)
   })
 })
 
@@ -89,5 +95,24 @@ describe('migrate from version 2', () => {
   it('keeps a stored rhythm', () => {
     const v3 = migrate({ entries: {}, settings: { rhythm: { mode: 'some', nights: [2] } } }, 3)
     expect(v3.settings.rhythm).toEqual({ mode: 'some', nights: [2] })
+  })
+})
+
+describe('migrate from version 3', () => {
+  const v3 = { entries: { '2026-10-19': entry('2026-10-19') }, settings: { name: 'Joe', theme: 'auto', rhythm: { mode: 'some', nights: [1] } }, backup: { lastExportAt: 5, entriesAtExport: 1, dismissedAtCount: 0 } }
+  const out = migrate(v3, 3)
+
+  it('keeps entries, settings and backup state', () => {
+    expect(out.entries['2026-10-19']).toEqual(v3.entries['2026-10-19'])
+    expect(out.settings).toEqual({ name: 'Joe', theme: 'auto', rhythm: { mode: 'some', nights: [1] }, reminderTime: '21:30', light: false })
+    expect(out.backup.lastExportAt).toBe(5)
+  })
+
+  it('adds the new local-only state', () => {
+    expect(out).toMatchObject({ onboarded: true, careShownOn: null, helpChecks: [], helpAskedOn: null, installDismissed: false, devTools: false })
+  })
+
+  it('keeps a stored reflection time', () => {
+    expect(migrate({ entries: {}, settings: { reminderTime: '22:15' }, onboarded: true }, 4).settings.reminderTime).toBe('22:15')
   })
 })

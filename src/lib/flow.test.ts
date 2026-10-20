@@ -134,6 +134,16 @@ describe('findPerson', () => {
     expect(findPerson('the view on Arthur Seat')).toBeNull()
   })
 
+  it('accepts a bare name as the whole entry', () => {
+    expect(findPerson('Jess')).toMatchObject({ name: 'Jess', relation: false })
+    expect(findPerson('Jess.')).toMatchObject({ name: 'Jess' })
+    expect(findPerson('Pizza')).toBeNull()
+    expect(findPerson('Toast')).toBeNull()
+    expect(findPerson('Sunset')).toBeNull()
+    expect(findPerson('Sunday')).toBeNull()
+    expect(findPerson('Netflix')).toBeNull()
+  })
+
   it('still finds a person alongside a place', () => {
     expect(findPerson('a walk in Hyde Park with Sam')).toMatchObject({ name: 'Sam' })
   })
@@ -157,7 +167,7 @@ describe('thankYouDraft', () => {
       'Hi Priya, I was thinking back on today. Thank you for the coffee. You listened properly. It meant a lot.',
     )
     expect(hi({ name: 'Mum', relation: false, match: 'Mum' }, 'A long call with Mum', 'she always knows what to say')).toBe(
-      'Hi Mum, I was thinking back on today. Thank you for a long call. You always know what to say. It meant a lot.',
+      'Hi Mum, I was thinking back on today. Thank you for the long call. You always know what to say. It meant a lot.',
     )
     expect(hi(sam, 'Laughing with Sam about nothing')).toBe('Hi Sam, I was thinking back on today. Thank you for laughing with me about nothing. It meant a lot.')
   })
@@ -170,7 +180,34 @@ describe('thankYouDraft', () => {
   })
 
   it('falls back to a general line when there is nothing to build from', () => {
-    expect(hi(sam, 'Sam')).toBe('Hi Sam, I was thinking back on today and wanted to say thank you. It meant more than you know.')
+    expect(hi(sam, 'Sam')).toBe('Hi Sam, I was thinking back on today. Thank you for today. It meant more than you know.')
     expect(thankYouDraft(sam)).toMatch(/^Hi Sam, .*more than you know\.$/)
+  })
+
+  it('reads smoothly for the review cases', () => {
+    const sarah = { name: 'Sarah', relation: false, match: 'Sarah' }
+    const alex = { name: 'Alex', relation: false, match: 'Alex' }
+    const dad = { name: 'Dad', relation: false, match: 'Dad' }
+    const boss = { name: 'my boss', relation: true, match: 'boss' }
+    expect(hi(sarah, 'Lunch with Sarah from work')).toBe('Hi Sarah, I was thinking back on today. Thank you for lunch. It meant a lot.')
+    expect(hi(alex, 'Coffee with Alex')).toBe('Hi Alex, I was thinking back on today. Thank you for the coffee. It meant a lot.')
+    expect(hi(dad, 'Talked to Dad')).toBe('Hi Dad, I was thinking back on today. Thank you for the chat. It meant a lot.')
+    expect(hi(boss, 'my boss said well done')).toBe('Hi, I was thinking back on today. Thank you for saying well done. It meant a lot.')
+    expect(hi(sam, 'Sam covered my shift')).toBe('Hi Sam, I was thinking back on today. You covered my shift. Thank you, it really helped.')
+  })
+
+  it('drops trailing context and keeps the because-line', () => {
+    expect(hi(sam, 'Sam made dinner tonight')).toBe('Hi Sam, I was thinking back on today. You made dinner. Thank you, it really helped.')
+    expect(hi({ name: 'Priya', relation: false, match: 'Priya' }, 'A walk with Priya after work', 'I needed the air')).toBe(
+      'Hi Priya, I was thinking back on today. Thank you for the walk. I needed the air. It meant a lot.',
+    )
+  })
+
+  it('falls back to "Thank you for today" when unsure', () => {
+    expect(hi(sam, 'Sam and I went to the beach', 'we laughed the whole way')).toBe(
+      'Hi Sam, I was thinking back on today. Thank you for today. We laughed the whole way.',
+    )
+    expect(hi(sam, 'Finally got to see a film with Sam')).toBe('Hi Sam, I was thinking back on today. Thank you for today. It meant more than you know.')
+    expect(hi(sam, 'Sam')).toContain('Thank you for today.')
   })
 })

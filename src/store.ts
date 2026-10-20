@@ -1,10 +1,11 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { addDays, logicalDate } from './lib/dates'
-import { applyImport } from './lib/backup'
+import { applyImport, mergeHelpChecks } from './lib/backup'
+import { needsCare } from './lib/care'
 import { isLetterNight, isLookbackNight, maxGratitudes } from './lib/flow'
 import { migrate, STORE_VERSION } from './lib/migrate'
-import { LETTER, LOOKBACK, moodBranch, promptFor } from './lib/prompts'
+import { CHECKIN, LETTER, LOOKBACK, moodBranch, promptFor } from './lib/prompts'
 import {
   DEFAULT_BACKUP,
   DEFAULT_SETTINGS,
@@ -13,6 +14,8 @@ import {
   type Draft,
   type Entry,
   type Gratitude,
+  type HelpAnswer,
+  type HelpCheck,
   type Letter,
   type Mood,
   type Settings,
@@ -25,6 +28,13 @@ interface State {
   backup: BackupState
   /** Developer time travel: offset added to the real clock. */
   clockOffsetMs: number
+  onboarded: boolean
+  /** Kept on this phone only: the night the heavy-stretch card was last shown. */
+  careShownOn: string | null
+  helpChecks: HelpCheck[]
+  helpAskedOn: string | null
+  installDismissed: boolean
+  devTools: boolean
 
   today: () => string
   startReflection: () => void
@@ -40,9 +50,16 @@ interface State {
   updateSettings: (patch: Partial<Settings>) => void
   recordExport: () => void
   dismissBackupReminder: () => void
-  importEntries: (incoming: Record<string, Entry>, replace: boolean) => void
+  importEntries: (incoming: Record<string, Entry>, replace: boolean, helpChecks?: HelpCheck[]) => void
+  finishOnboarding: () => void
+  dismissInstall: () => void
+  setDevTools: (on: boolean) => void
+  markHelpAsked: (date: string) => void
+  answerHelp: (date: string, answer: HelpAnswer) => void
   setClockOffset: (ms: number) => void
   seedDemo: (nights: number) => void
+  /** Prototype tool: makes three of the last six nights heavy, to try the care card. */
+  seedHeavyWeek: () => void
   reset: () => void
 }
 
@@ -66,6 +83,12 @@ export const useStore = create<State>()(
         settings: DEFAULT_SETTINGS,
         backup: DEFAULT_BACKUP,
         clockOffsetMs: 0,
+        onboarded: false,
+        careShownOn: null,
+        helpChecks: [],
+        helpAskedOn: null,
+        installDismissed: false,
+        devTools: false,
 
         today: () => logicalDate(now()),
 
@@ -78,7 +101,8 @@ export const useStore = create<State>()(
             const { starred: _s, createdAt: _c, updatedAt: _u, ...rest } = existing
             const gratitudes = [...existing.gratitudes, ...blankGratitudes()].slice(0, 3)
             const letterChoice = existing.letter ? 'write' : existing.letterOffered ? 'declined' : 'undecided'
-            set({ draft: { ...rest, gratitudes, step: 'mood', promptSkip: 0, letterChoice } })
+            const care = existing.promptId === CHECKIN.id ? 'checkin' : 'none'
+            set({ draft: { ...rest, gratitudes, step: 'mood', promptSkip: 0, letterChoice, care } })
             return
           }
           set({
@@ -98,6 +122,7 @@ export const useStore = create<State>()(
               letter: null,
               letterOffered: false,
               letterChoice: 'undecided',
+              care: 'none',
             }),
           })
         },
@@ -128,7 +153,10 @@ export const useStore = create<State>()(
           const d = get().draft
           if (!d) return
           const changedBranch = moodBranch(d.mood) !== moodBranch(mood) || d.mood === null
-          const next = { ...d, mood }
+          // After a heavy stretch, a hard night opens with a gentle card. Only this phone remembers it was shown.
+          const care = needsCare(d.date, get().entries, mood, get().careShownOn)
+          if (care && d.care === 'none') set({ careShownOn: d.date })
+          const next = { ...d, mood, care: care ? (d.care === 'none' ? 'offer' : d.care) : 'none' } as Draft
           // A different kind of night gets a prompt suited to it, unless one was already answered.
           set({ draft: changedBranch && !d.promptAnswer.trim() ? withPrompt({ ...next, promptSkip: 0 }) : next })
         },
@@ -158,20 +186,23 @@ export const useStore = create<State>()(
           const { step: _step, promptSkip: _skip, letterChoice, ...rest } = draft
           const t = Date.now()
           const previous = entries[draft.date]
-          const { rhythm } = get().settings
+          const { rhythm, light } = get().settings
+          const checkin = draft.care === 'checkin'
           const lookback = isLookbackNight(draft.date, entries, draft.mood, rhythm)
           const letterNight = !lookback && isLetterNight(draft.date, entries, draft.mood, rhythm)
           const wroteLetter = letterNight && letterChoice !== 'declined' && !!draft.letter?.text.trim() && !!draft.letter.to.trim()
-          const limit = maxGratitudes(moodBranch(draft.mood))
+          const limit = checkin ? 0 : maxGratitudes(moodBranch(draft.mood), light)
+          const { care: _care, ...fields } = rest
           const entry: Entry = {
-            ...rest,
+            ...fields,
             gratitudes: rest.gratitudes
               .slice(0, limit)
               .map((g) => ({ text: g.text.trim(), because: g.because.trim() }))
               .filter((g) => g.text),
             ...(lookback ? { lens: null, promptId: LOOKBACK.id, promptText: LOOKBACK.text } : { weekPick: null }),
             ...(wroteLetter ? { lens: null, promptId: LETTER.id, promptText: LETTER.text } : {}),
-            promptAnswer: lookback || wroteLetter ? '' : rest.promptAnswer.trim(),
+            ...(checkin ? { lens: null, promptId: CHECKIN.id, promptText: CHECKIN.text, weekPick: null } : {}),
+            promptAnswer: lookback || wroteLetter || checkin ? '' : rest.promptAnswer.trim(),
             letter: wroteLetter ? { ...draft.letter!, to: draft.letter!.to.trim(), text: draft.letter!.text.trim() } : null,
             letterOffered: letterNight,
             moodNote: rest.moodNote.trim(),
@@ -196,7 +227,13 @@ export const useStore = create<State>()(
 
         dismissBackupReminder: () => set({ backup: { ...get().backup, dismissedAtCount: Object.keys(get().entries).length } }),
 
-        importEntries: (incoming, replace) => set({ entries: applyImport(get().entries, incoming, replace) }),
+        importEntries: (incoming, replace, helpChecks = []) =>
+          set({ entries: applyImport(get().entries, incoming, replace), helpChecks: mergeHelpChecks(get().helpChecks, helpChecks) }),
+        finishOnboarding: () => set({ onboarded: true }),
+        dismissInstall: () => set({ installDismissed: true }),
+        setDevTools: (devTools) => set({ devTools }),
+        markHelpAsked: (date) => set({ helpAskedOn: date }),
+        answerHelp: (date, answer) => set({ helpChecks: mergeHelpChecks(get().helpChecks, [{ date, answer }]) }),
         setClockOffset: (clockOffsetMs) => set({ clockOffsetMs }),
 
         seedDemo: (nights) => {
@@ -245,14 +282,65 @@ export const useStore = create<State>()(
           set({ entries })
         },
 
-        reset: () => set({ entries: {}, draft: null, settings: DEFAULT_SETTINGS, backup: DEFAULT_BACKUP, clockOffsetMs: 0 }),
+        seedHeavyWeek: () => {
+          const today = get().today()
+          const entries = { ...get().entries }
+          for (const i of [1, 3, 5]) {
+            const date = addDays(today, -i)
+            const t = Date.now() - i * 86_400_000
+            entries[date] = {
+              date,
+              mood: 1,
+              gratitudes: entries[date]?.gratitudes ?? [],
+              lens: 'hardDay',
+              promptId: 'letgo',
+              promptText: 'What can you let go of before you sleep?',
+              promptAnswer: '',
+              moodNote: 'A heavy one.',
+              weekPick: null,
+              starred: false,
+              thanks: [],
+              letter: null,
+              letterOffered: false,
+              createdAt: t,
+              updatedAt: t,
+            }
+          }
+          set({ entries, careShownOn: null })
+        },
+
+        reset: () =>
+          set({
+            entries: {},
+            draft: null,
+            settings: DEFAULT_SETTINGS,
+            backup: DEFAULT_BACKUP,
+            clockOffsetMs: 0,
+            onboarded: false,
+            careShownOn: null,
+            helpChecks: [],
+            helpAskedOn: null,
+            installDismissed: false,
+          }),
       }
     },
     {
       name: 'gleam',
       version: STORE_VERSION,
       migrate: (persisted, version) => migrate(persisted, version) as unknown as State,
-      partialize: ({ entries, draft, settings, backup, clockOffsetMs }) => ({ entries, draft, settings, backup, clockOffsetMs }),
+      partialize: ({ entries, draft, settings, backup, clockOffsetMs, onboarded, careShownOn, helpChecks, helpAskedOn, installDismissed, devTools }) => ({
+        entries,
+        draft,
+        settings,
+        backup,
+        clockOffsetMs,
+        onboarded,
+        careShownOn,
+        helpChecks,
+        helpAskedOn,
+        installDismissed,
+        devTools,
+      }),
     },
   ),
 )

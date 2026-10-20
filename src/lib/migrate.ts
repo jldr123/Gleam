@@ -1,7 +1,7 @@
 import { lensOf } from './prompts'
-import { DEFAULT_BACKUP, DEFAULT_SETTINGS, type BackupState, type Entry, type Gratitude, type Mood, type Settings } from './types'
+import { DEFAULT_BACKUP, DEFAULT_SETTINGS, type BackupState, type Entry, type Gratitude, type HelpCheck, type Mood, type Settings } from './types'
 
-export const STORE_VERSION = 3
+export const STORE_VERSION = 4
 
 export interface Persisted {
   entries: Record<string, Entry>
@@ -9,7 +9,21 @@ export interface Persisted {
   settings: Settings
   backup: BackupState
   clockOffsetMs: number
+  /** True once the first-run screens were seen or skipped. */
+  onboarded: boolean
+  /** The night the heavy-stretch card was last shown. Kept on this phone only, never in a backup. */
+  careShownOn: string | null
+  /** Answers to the monthly "Is Gleam helping?" check. Only shown in a backup. */
+  helpChecks: HelpCheck[]
+  /** The night that check was last asked. */
+  helpAskedOn: string | null
+  installDismissed: boolean
+  /** Prototype tools unlocked by tapping the version number seven times. */
+  devTools: boolean
 }
+
+/** Fields older versions didn't have. */
+type Later = Pick<Persisted, 'onboarded' | 'careShownOn' | 'helpChecks' | 'helpAskedOn' | 'installDismissed' | 'devTools'>
 
 /** Version 1 stored gratitudes as plain strings and had no lens, stars or thank-yous. */
 interface EntryV1 {
@@ -57,7 +71,9 @@ function entryFromV1(e: EntryV1): Entry {
  * longer exist.
  */
 export function migrate(persisted: unknown, version: number): Persisted {
-  const old = (persisted ?? {}) as Partial<{ entries: Record<string, unknown>; settings: Partial<Settings>; backup: BackupState; clockOffsetMs: number }>
+  const old = (persisted ?? {}) as Partial<
+    { entries: Record<string, unknown>; settings: Partial<Settings>; backup: BackupState; clockOffsetMs: number } & Later
+  >
   const entries: Record<string, Entry> = {}
   for (const [date, raw] of Object.entries(old.entries ?? {})) {
     if (version < 2) entries[date] = entryFromV1(raw as EntryV1)
@@ -70,5 +86,12 @@ export function migrate(persisted: unknown, version: number): Persisted {
     settings: { ...DEFAULT_SETTINGS, ...old.settings, rhythm: { ...DEFAULT_SETTINGS.rhythm, ...old.settings?.rhythm } },
     backup: { ...DEFAULT_BACKUP, ...old.backup },
     clockOffsetMs: old.clockOffsetMs ?? 0,
+    // People who already reflected before the first-run screens existed skip them.
+    onboarded: old.onboarded ?? Object.keys(entries).length > 0,
+    careShownOn: old.careShownOn ?? null,
+    helpChecks: Array.isArray(old.helpChecks) ? old.helpChecks : [],
+    helpAskedOn: old.helpAskedOn ?? null,
+    installDismissed: old.installDismissed ?? false,
+    devTools: old.devTools ?? false,
   }
 }

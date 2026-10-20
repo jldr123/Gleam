@@ -58,7 +58,13 @@ export interface Entry {
   updatedAt: number
 }
 
-export type Step = 'mood' | 'gratitude' | 'prompt' | 'lookback' | 'letter' | 'thanks' | 'note'
+export type Step = 'mood' | 'care' | 'gratitude' | 'prompt' | 'lookback' | 'letter' | 'thanks' | 'note'
+
+/**
+ * The gentle card after a heavy stretch: offered, then either a quick
+ * check-in (mood and note only) or carrying on with the usual night.
+ */
+export type Care = 'none' | 'offer' | 'checkin' | 'carry'
 
 export type Draft = Omit<Entry, 'starred' | 'createdAt' | 'updatedAt'> & {
   step: Step
@@ -66,6 +72,7 @@ export type Draft = Omit<Entry, 'starred' | 'createdAt' | 'updatedAt'> & {
   promptSkip: number
   /** On a deeper night, whether the user chose the letter or tonight's question instead. */
   letterChoice: 'undecided' | 'write' | 'declined'
+  care: Care
 }
 
 export type Theme = 'auto' | 'light' | 'dark'
@@ -80,12 +87,26 @@ export interface Settings {
   name: string
   theme: Theme
   rhythm: Rhythm
+  /** The evening reflection time, HH:MM in 24 hours. Kept for native reminders later. */
+  reminderTime: string
+  /** Lighter nights: one gratitude instead of up to three. */
+  light: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   name: '',
   theme: 'auto',
   rhythm: { mode: 'nightly', nights: [0, 3] },
+  reminderTime: '21:30',
+  light: false,
+}
+
+export type HelpAnswer = 'yes' | 'sortOf' | 'notReally'
+
+/** An answer to the monthly "Is Gleam helping you wind down?" check. Only ever shown in a backup. */
+export interface HelpCheck {
+  date: string
+  answer: HelpAnswer
 }
 
 /** When the user last saved a backup, for the gentle reminder. */

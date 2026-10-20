@@ -1,6 +1,19 @@
 import { useRef, useState } from 'react'
 import { Button, Card, TopBar } from '../components/ui'
-import { backupFileName, backupJSON, backupText, BackupError, parseBackup, planImport, type BackupFile, type ImportPlan } from '../lib/backup'
+import {
+  backupFileName,
+  backupJSON,
+  backupText,
+  BackupError,
+  hasDefaultSettings,
+  parseBackup,
+  planImport,
+  restoredSettings,
+  settingsDiffer,
+  type BackupFile,
+  type ImportPlan,
+} from '../lib/backup'
+import type { Settings } from '../lib/types'
 import { useStore } from '../store'
 import { useUI } from '../ui'
 
@@ -31,17 +44,20 @@ export function Backup() {
   const entries = useStore((s) => s.entries)
   const settings = useStore((s) => s.settings)
   const backup = useStore((s) => s.backup)
+  const helpChecks = useStore((s) => s.helpChecks)
+  const updateSettings = useStore((s) => s.updateSettings)
   const recordExport = useStore((s) => s.recordExport)
   const importEntries = useStore((s) => s.importEntries)
   const input = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [pending, setPending] = useState<Pending | null>(null)
+  const [askSettings, setAskSettings] = useState<{ settings: Settings; restored: string } | null>(null)
 
   const count = Object.keys(entries).length
   const last = backup.lastExportAt ? new Date(backup.lastExportAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long' }) : null
 
   const exportJSON = async () => {
-    if (await saveFile(backupFileName('json'), 'application/json', backupJSON(entries, settings))) {
+    if (await saveFile(backupFileName('json'), 'application/json', backupJSON(entries, settings, helpChecks))) {
       recordExport()
       setMessage('Backup saved. Keep it somewhere safe, like iCloud Drive or Files.')
     }
@@ -55,6 +71,7 @@ export function Backup() {
     const f = e.target.files?.[0]
     e.target.value = ''
     if (!f) return
+    setAskSettings(null)
     try {
       const file = parseBackup(await f.text())
       const plan = planImport(entries, file.entries)
@@ -67,10 +84,26 @@ export function Backup() {
   }
 
   const finish = (file: BackupFile, plan: ImportPlan, replace: boolean) => {
-    importEntries(file.entries, replace)
+    importEntries(file.entries, replace, file.helpChecks)
     setPending(null)
     const changed = plan.added.length + (replace ? plan.conflicts.length : 0)
-    setMessage(changed === 0 ? 'Everything in that backup is already here.' : `Restored ${changed} ${changed === 1 ? 'night' : 'nights'}.`)
+    const restored = changed === 0 ? 'Everything in that backup is already here.' : `Restored ${changed} ${changed === 1 ? 'night' : 'nights'}.`
+    const current = useStore.getState().settings
+    if (!settingsDiffer(current, file.settings)) return setMessage(restored)
+    // A phone that was never set up takes the backup's settings; otherwise ask first.
+    if (hasDefaultSettings(current)) {
+      updateSettings(restoredSettings(current, file.settings))
+      return setMessage(`${restored} Your settings are back too.`)
+    }
+    setMessage(null)
+    setAskSettings({ settings: file.settings, restored })
+  }
+
+  const answerSettings = (yes: boolean) => {
+    if (!askSettings) return
+    if (yes) updateSettings(restoredSettings(useStore.getState().settings, askSettings.settings))
+    setMessage(`${askSettings.restored}${yes ? ' Your settings are back too.' : ''}`)
+    setAskSettings(null)
   }
 
   return (
@@ -102,7 +135,20 @@ export function Backup() {
 
         <Card>
           <div className="text-xs text-muted">Restore</div>
-          {pending ? (
+          {askSettings ? (
+            <div className="mt-2">
+              <p className="text-[15px] leading-relaxed">{askSettings.restored} Also restore your settings?</p>
+              <p className="mt-1 text-sm text-muted">Your name, theme, rhythm and reflection time from the backup.</p>
+              <div className="mt-3 flex flex-col gap-2">
+                <Button variant="quiet" onClick={() => answerSettings(true)}>
+                  Restore settings
+                </Button>
+                <Button variant="ghost" onClick={() => answerSettings(false)}>
+                  Keep this phone's settings
+                </Button>
+              </div>
+            </div>
+          ) : pending ? (
             <div className="mt-2">
               <p className="text-[15px] leading-relaxed">
                 {pending.plan.added.length > 0 && `${pending.plan.added.length} new ${pending.plan.added.length === 1 ? 'night' : 'nights'} will be added. `}
