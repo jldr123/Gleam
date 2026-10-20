@@ -1,22 +1,9 @@
 import { addDays, logicalDate } from './dates'
-import { promptFor } from './prompts'
 import { moodWeek, resurface, topThemes } from './stats'
 import { computeStreak } from './streak'
-import type { Entry } from './types'
+import { entry } from '../test/fixtures'
 
 const TODAY = '2026-10-19'
-
-const entry = (date: string, gratitudes: string[] = ['tea'], mood: Entry['mood'] = 3): Entry => ({
-  date,
-  gratitudes,
-  promptId: 'x',
-  promptText: 'x',
-  promptAnswer: '',
-  mood,
-  moodNote: '',
-  createdAt: 0,
-  updatedAt: 0,
-})
 
 const byDate = (...daysAgo: number[]) => Object.fromEntries(daysAgo.map((n) => [addDays(TODAY, -n), entry(addDays(TODAY, -n))]))
 
@@ -73,17 +60,19 @@ describe('moodWeek', () => {
 })
 
 describe('resurface', () => {
-  it('prefers an entry from exactly a week ago', () => {
-    expect(resurface(byDate(7, 10), TODAY)?.label).toBe('A week ago')
+  it('waits for enough history', () => {
+    expect(resurface(byDate(30, 31, 32), TODAY)).toBeNull()
   })
-  it('ignores the last few days', () => {
-    expect(resurface(byDate(0, 1, 2), TODAY)).toBeNull()
+  it('prefers an entry from exactly a month ago', () => {
+    expect(resurface(byDate(1, 2, 3, 4, 5, 10, 30), TODAY)?.lead).toBe('A month ago you were grateful for')
   })
-})
-
-describe('promptFor', () => {
-  it('is stable for a date and changes with skip', () => {
-    expect(promptFor(TODAY).id).toBe(promptFor(TODAY).id)
-    expect(promptFor(TODAY, 1).id).not.toBe(promptFor(TODAY).id)
+  it('otherwise picks a starred or detailed entry older than a week', () => {
+    const entries = byDate(1, 2, 3, 4, 5, 6, 12, 15)
+    const starred = addDays(TODAY, -15)
+    entries[starred] = entry(starred, ['the sea'], 4, { starred: true })
+    expect(resurface(entries, TODAY)?.entry.date).toBe(starred)
+  })
+  it('ignores the last week', () => {
+    expect(resurface(byDate(0, 1, 2, 3, 4, 5, 6), TODAY)).toBeNull()
   })
 })

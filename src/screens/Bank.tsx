@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Card, TopBar } from '../components/ui'
+import { Card, Star, TopBar } from '../components/ui'
 import { formatLongDate, formatMonth, weekdayLetter } from '../lib/dates'
-import { moodWeek, topThemes, totalGratitudes } from '../lib/stats'
+import { moodWeek, thanksSent, topThemes, totalGratitudes } from '../lib/stats'
 import { computeStreak } from '../lib/streak'
 import { MOODS, type Entry } from '../lib/types'
 import { useStore } from '../store'
@@ -58,6 +58,7 @@ function Summary({ entries, list, today }: { entries: Record<string, Entry>; lis
   const streak = computeStreak(entries, today)
   const week = moodWeek(entries, today)
   const themes = topThemes(list)
+  const thanks = thanksSent(list)
   const stats = [
     { value: totalGratitudes(list), label: 'good things saved' },
     { value: list.length, label: list.length === 1 ? 'night reflected' : 'nights reflected' },
@@ -86,6 +87,11 @@ function Summary({ entries, list, today }: { entries: Record<string, Entry>; lis
           ))}
         </div>
       </div>
+      {thanks > 0 && (
+        <div className="mt-4 border-t border-line pt-4 text-sm text-muted">
+          You've said thank you {thanks === 1 ? 'once' : `${thanks} times`}.
+        </div>
+      )}
       {themes.length > 0 && (
         <div className="mt-4 border-t border-line pt-4">
           <div className="mb-2 text-xs text-muted">What keeps coming up</div>
@@ -104,35 +110,41 @@ function Summary({ entries, list, today }: { entries: Record<string, Entry>; lis
 
 function EntryRow({ entry, open, onToggle }: { entry: Entry; open: boolean; onToggle: () => void }) {
   const mood = MOODS.find((m) => m.value === entry.mood)
+  const [first, ...rest] = entry.gratitudes
   return (
     <div className="rounded-3xl border border-line bg-surface">
       <button onClick={onToggle} className="flex w-full items-start gap-3 px-5 py-4 text-left">
         <div className="flex-1">
           <div className="text-xs text-muted">{formatLongDate(entry.date)}</div>
           <div className="mt-1 font-serif text-[17px] leading-snug">
-            {entry.gratitudes[0] ?? entry.moodNote ?? 'A quiet night'}
-            {entry.gratitudes.length > 1 && !open && <span className="text-faint"> +{entry.gratitudes.length - 1}</span>}
+            {first?.text || entry.moodNote || entry.promptAnswer || 'A quiet night'}
+            {rest.length > 0 && !open && <span className="text-faint"> +{rest.length}</span>}
           </div>
         </div>
-        {entry.mood && <MoodDot mood={entry.mood} size="sm" />}
+        <div className="flex items-center gap-2 pt-0.5">
+          {entry.starred && <Star className="h-4 w-4 text-accent" />}
+          {entry.mood && <MoodDot mood={entry.mood} size="sm" />}
+        </div>
       </button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
             <div className="flex flex-col gap-4 px-5 pb-5 text-[15px] leading-relaxed">
-              {entry.gratitudes.length > 1 && (
-                <ul className="flex flex-col gap-1 font-serif text-[17px]">
-                  {entry.gratitudes.slice(1).map((g, i) => (
-                    <li key={i}>{g}</li>
-                  ))}
-                </ul>
-              )}
+              {first?.because && <div className="text-muted italic">because {first.because}</div>}
+              {rest.map((g, i) => (
+                <div key={i}>
+                  <div className="font-serif text-[17px]">{g.text}</div>
+                  {g.because && <div className="text-muted italic">because {g.because}</div>}
+                </div>
+              ))}
               {entry.promptAnswer && (
                 <div>
                   <div className="text-xs text-muted">{entry.promptText}</div>
                   <div className="mt-1">{entry.promptAnswer}</div>
                 </div>
               )}
+              {entry.weekPick && <div className="text-xs text-muted">Looked back on the week and kept {entry.weekPick === entry.date ? 'tonight' : formatLongDate(entry.weekPick)}.</div>}
+              {entry.thanks.length > 0 && <div className="text-xs text-muted">Said thank you to {[...new Set(entry.thanks.map((t) => t.name))].join(' and ')}.</div>}
               {(mood || entry.moodNote) && (
                 <div>
                   <div className="text-xs text-muted">{mood ? `Felt ${mood.label.toLowerCase()}` : 'The day'}</div>

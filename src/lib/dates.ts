@@ -50,8 +50,17 @@ export function formatLongDate(date: string): string {
   return parseISODate(date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
 }
 
+export function formatShortDay(date: string): string {
+  return parseISODate(date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })
+}
+
 export function formatMonth(date: string): string {
   return parseISODate(date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+}
+
+/** 0 is Sunday. */
+export function weekday(date: string): number {
+  return parseISODate(date).getDay()
 }
 
 export function weekdayLetter(date: string): string {

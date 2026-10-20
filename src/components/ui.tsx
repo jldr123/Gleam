@@ -12,6 +12,14 @@ export function Sparkle({ className = '' }: { className?: string }) {
   )
 }
 
+export function Star({ filled = true, className = '' }: { filled?: boolean; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.8l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8L12 3.5Z" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export function Chevron({ dir = 'left', className = '' }: { dir?: 'left' | 'right'; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
