@@ -1,6 +1,6 @@
 import { formatLongDate } from './dates'
 import { migrate, STORE_VERSION } from './migrate'
-import { MOODS, type BackupState, type Entry, type Settings } from './types'
+import { DEFAULT_SETTINGS, MOODS, type BackupState, type Entry, type HelpCheck, type Settings } from './types'
 
 export const BACKUP_APP = 'gleam'
 
@@ -10,10 +10,12 @@ export interface BackupFile {
   exportedAt: string
   entries: Record<string, Entry>
   settings: Settings
+  /** Answers to the monthly "Is Gleam helping?" check. */
+  helpChecks: HelpCheck[]
 }
 
-export function backupJSON(entries: Record<string, Entry>, settings: Settings, now = new Date()): string {
-  const file: BackupFile = { app: BACKUP_APP, version: STORE_VERSION, exportedAt: now.toISOString(), entries, settings }
+export function backupJSON(entries: Record<string, Entry>, settings: Settings, helpChecks: HelpCheck[] = [], now = new Date()): string {
+  const file: BackupFile = { app: BACKUP_APP, version: STORE_VERSION, exportedAt: now.toISOString(), entries, settings, helpChecks }
   return JSON.stringify(file, null, 2)
 }
 
@@ -50,11 +52,18 @@ export function parseBackup(text: string): BackupFile {
   }
   const version = typeof file.version === 'number' ? file.version : 1
   if (version > STORE_VERSION) throw new BackupError('This backup is from a newer version of Gleam. Update the app and try again.')
-  const migrated = migrate({ entries: file.entries, settings: file.settings }, version)
+  const migrated = migrate({ entries: file.entries, settings: file.settings, helpChecks: file.helpChecks }, version)
   for (const [date, e] of Object.entries(migrated.entries)) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || e.date !== date) throw new BackupError('Some nights in this backup are damaged, so nothing was imported.')
   }
-  return { app: BACKUP_APP, version: STORE_VERSION, exportedAt: file.exportedAt ?? '', entries: migrated.entries, settings: migrated.settings }
+  return {
+    app: BACKUP_APP,
+    version: STORE_VERSION,
+    exportedAt: file.exportedAt ?? '',
+    entries: migrated.entries,
+    settings: migrated.settings,
+    helpChecks: migrated.helpChecks,
+  }
 }
 
 export interface ImportPlan {
@@ -87,6 +96,33 @@ export function applyImport(existing: Record<string, Entry>, incoming: Record<st
   for (const d of plan.added) next[d] = incoming[d]
   if (replace) for (const d of plan.conflicts) next[d] = incoming[d]
   return next
+}
+
+/** The settings a backup can bring back. */
+const RESTORABLE = ['name', 'theme', 'rhythm', 'reminderTime', 'light'] as const
+
+/** True when this phone's settings were never changed, so a restore can bring the backup's in without asking. */
+export function hasDefaultSettings(settings: Settings): boolean {
+  return RESTORABLE.every((k) => JSON.stringify(settings[k]) === JSON.stringify(DEFAULT_SETTINGS[k]))
+}
+
+/** Whether restoring would change anything, so the question is only asked when it matters. */
+export function settingsDiffer(current: Settings, backup: Settings): boolean {
+  return RESTORABLE.some((k) => JSON.stringify(current[k]) !== JSON.stringify(backup[k]))
+}
+
+/** This phone's settings with name, theme, rhythm and reflection time taken from the backup. */
+export function restoredSettings(current: Settings, backup: Settings): Settings {
+  const next = { ...current }
+  for (const k of RESTORABLE) (next as Record<string, unknown>)[k] = backup[k]
+  return next
+}
+
+/** Merges the monthly check answers by date, keeping this phone's on a clash. */
+export function mergeHelpChecks(existing: HelpCheck[], incoming: HelpCheck[]): HelpCheck[] {
+  const byDate = new Map(incoming.map((c) => [c.date, c]))
+  for (const c of existing) byDate.set(c.date, c)
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
 }
 
 /** Nights saved between gentle backup reminders. */

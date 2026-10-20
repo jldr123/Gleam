@@ -2,10 +2,11 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, Sparkle, Star, TopBar } from '../components/ui'
 import { formatShortDay } from '../lib/dates'
+import { isHelpCheckNight } from '../lib/care'
 import { closingLine, maxGratitudes, personFromDraft, specificityNudge, stepsFor, SUPPORT_URL, weekEntries } from '../lib/flow'
 import { thankYouDraft } from '../lib/people'
 import { LENS_LABELS, LOOKBACK, moodBranch } from '../lib/prompts'
-import { MAX_TEXT_LENGTH, MOODS, type Mood, type Step } from '../lib/types'
+import { MAX_TEXT_LENGTH, MOODS, type HelpAnswer, type Mood, type Step } from '../lib/types'
 import { useStore } from '../store'
 import { useUI } from '../ui'
 
@@ -59,6 +60,7 @@ export function Reflect() {
           className="flex flex-1 flex-col px-6 pt-8"
         >
           {step === 'mood' && <MoodStep onNext={(s) => goTo(s)} />}
+          {step === 'care' && <CareStep onNext={next} />}
           {step === 'gratitude' && <GratitudeStep onNext={next} />}
           {step === 'prompt' && <PromptStep onNext={next} />}
           {step === 'lookback' && <LookbackStep onNext={next} />}
@@ -108,7 +110,8 @@ function MoodStep({ onNext }: { onNext: (step: Step) => void }) {
 
   const pick = (mood: Mood) => {
     setMood(mood)
-    const steps = stepsFor({ ...draft, mood }, entries, rhythm)
+    // Read the draft back: a new mood can add the care card.
+    const steps = stepsFor(useStore.getState().draft ?? { ...draft, mood }, entries, rhythm)
     clearTimeout(timer.current)
     // A short pause so the tap registers before the screen moves on.
     timer.current = window.setTimeout(() => onNext(steps[1]), 320)
@@ -132,11 +135,44 @@ function MoodStep({ onNext }: { onNext: (step: Step) => void }) {
   )
 }
 
+function CareStep({ onNext }: { onNext: () => void }) {
+  const updateDraft = useStore((s) => s.updateDraft)
+  return (
+    <>
+      <Question
+        title="It sounds like it's been a heavy few days."
+        hint="You don't have to do anything tonight. A quick check-in is enough, or carry on if writing helps."
+      />
+      <SupportLink />
+      <Footer>
+        <Button
+          className="w-full"
+          onClick={() => {
+            updateDraft({ care: 'checkin', step: 'note' })
+          }}
+        >
+          Just a quick check-in
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            updateDraft({ care: 'carry' })
+            onNext()
+          }}
+        >
+          Carry on
+        </Button>
+      </Footer>
+    </>
+  )
+}
+
 function GratitudeStep({ onNext }: { onNext: () => void }) {
   const draft = useStore((s) => s.draft)!
+  const light = useStore((s) => s.settings.light)
   const setGratitude = useStore((s) => s.setGratitude)
   const branch = moodBranch(draft.mood)
-  const max = maxGratitudes(branch)
+  const max = maxGratitudes(branch, light)
   const filled = draft.gratitudes.slice(0, max).filter((g) => g.text.trim()).length
   const [shown, setShown] = useState(Math.max(1, filled))
   const lastFilled = !!draft.gratitudes[shown - 1]?.text.trim()
@@ -146,7 +182,9 @@ function GratitudeStep({ onNext }: { onNext: () => void }) {
     <>
       <Question
         title={low ? 'Just one thing tonight, if anything.' : 'What was good today?'}
-        hint={low ? 'It can be very small. Or nothing at all.' : 'One to three things. Anything real counts, however small.'}
+        hint={
+          low ? 'It can be very small. Or nothing at all.' : max === 1 ? 'Just one thing. Anything real counts, however small.' : 'One to three things. Anything real counts, however small.'
+        }
       />
       <div className="mt-7 flex flex-col gap-3">
         {draft.gratitudes.slice(0, shown).map((g, i) => (
@@ -458,6 +496,14 @@ export function MoodDot({ mood, active = true, size = 'lg' }: { mood: number; ac
 
 function Close({ mood, date }: { mood: Mood | null; date: string }) {
   const go = useUI((s) => s.go)
+  const entries = useStore((s) => s.entries)
+  const rhythm = useStore((s) => s.settings.rhythm)
+  const markHelpAsked = useStore((s) => s.markHelpAsked)
+  // Decided once as the screen opens, so it doesn't vanish once marked as asked.
+  const [ask] = useState(() => isHelpCheckNight(date, entries, mood, useStore.getState().helpAskedOn, rhythm))
+  useEffect(() => {
+    if (ask) markHelpAsked(date)
+  }, [ask, date, markHelpAsked])
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -470,9 +516,84 @@ function Close({ mood, date }: { mood: Mood | null; date: string }) {
       </motion.div>
       <h2 className="mt-6 max-w-[18rem] font-serif text-[28px] leading-snug font-light">{closingLine(mood, date)}</h2>
       {moodBranch(mood) === 'veryLow' && <SupportLink />}
+      {ask && <HelpCheck date={date} />}
       <Button variant="quiet" className="mt-10" onClick={() => go('home')}>
         Goodnight
       </Button>
+    </motion.div>
+  )
+}
+
+const ANSWERS: { value: HelpAnswer; label: string }[] = [
+  { value: 'yes', label: 'Yes' },
+  { value: 'sortOf', label: 'Sort of' },
+  { value: 'notReally', label: 'Not really' },
+]
+
+/** Once a month: is this actually helping? Answers stay on the phone and only appear in a backup. */
+function HelpCheck({ date }: { date: string }) {
+  const answerHelp = useStore((s) => s.answerHelp)
+  const settings = useStore((s) => s.settings)
+  const updateSettings = useStore((s) => s.updateSettings)
+  const [answer, setAnswer] = useState<HelpAnswer | null>(null)
+  const [changed, setChanged] = useState<string | null>(null)
+
+  const pick = (a: HelpAnswer) => {
+    answerHelp(date, a)
+    setAnswer(a)
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }} className="mt-10 w-full max-w-[20rem] rounded-3xl border border-line bg-surface p-5">
+      {answer === null ? (
+        <>
+          <div className="text-[15px]">Is Gleam helping you wind down?</div>
+          <div className="mt-4 flex flex-col gap-2">
+            {ANSWERS.map((a) => (
+              <Button key={a.value} variant="quiet" className="py-2.5 text-sm" onClick={() => pick(a.value)}>
+                {a.label}
+              </Button>
+            ))}
+          </div>
+        </>
+      ) : answer === 'yes' ? (
+        <div className="text-[15px] text-muted">Thank you. That's good to hear.</div>
+      ) : changed ? (
+        <div className="text-[15px] text-muted">{changed} You can change it any time in Settings.</div>
+      ) : (
+        <>
+          <div className="text-[15px]">Thanks for saying. Would a lighter rhythm suit you better?</div>
+          <div className="mt-4 flex flex-col gap-2">
+            {settings.rhythm.mode === 'nightly' && (
+              <Button
+                variant="quiet"
+                className="py-2.5 text-sm"
+                onClick={() => {
+                  updateSettings({ rhythm: { ...settings.rhythm, mode: 'some' } })
+                  setChanged('Done: a few nights a week.')
+                }}
+              >
+                A few nights a week
+              </Button>
+            )}
+            {!settings.light && (
+              <Button
+                variant="quiet"
+                className="py-2.5 text-sm"
+                onClick={() => {
+                  updateSettings({ light: true })
+                  setChanged('Done: just one good thing each night.')
+                }}
+              >
+                Lighter nights, one thing each
+              </Button>
+            )}
+            <Button variant="ghost" className="py-2 text-sm" onClick={() => setChanged('Keeping things as they are.')}>
+              Keep things as they are
+            </Button>
+          </div>
+        </>
+      )}
     </motion.div>
   )
 }

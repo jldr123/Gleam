@@ -5,9 +5,9 @@ import { DEFAULT_SETTINGS, type Draft, type Entry, type Mood, type Rhythm, type 
 
 export const SUPPORT_URL = 'https://findahelpline.com'
 
-/** How many gratitude slots a night offers. Very low nights skip the ask entirely. */
-export function maxGratitudes(branch: Branch): number {
-  return branch === 'normal' ? 3 : branch === 'low' ? 1 : 0
+/** How many gratitude slots a night offers. Very low nights skip the ask entirely; lighter nights ask for one. */
+export function maxGratitudes(branch: Branch, light = false): number {
+  return branch === 'normal' ? (light ? 1 : 3) : branch === 'low' ? 1 : 0
 }
 
 /** The previous six nights' entries, oldest first. */
@@ -49,13 +49,16 @@ export function isLetterNight(date: string, entries: Record<string, Entry>, mood
   return h % 3 === 0
 }
 
-type FlowDraft = Pick<Draft, 'date' | 'mood' | 'gratitudes' | 'promptAnswer'> & Partial<Pick<Draft, 'letterChoice'>>
+type FlowDraft = Pick<Draft, 'date' | 'mood' | 'gratitudes' | 'promptAnswer'> & Partial<Pick<Draft, 'letterChoice' | 'care'>>
 
 /** The steps for tonight, in order. Recomputed as the draft changes, since mood and names reshape the flow. */
 export function stepsFor(draft: FlowDraft, entries: Record<string, Entry>, rhythm: Rhythm = DEFAULT_SETTINGS.rhythm): Step[] {
   const branch = moodBranch(draft.mood)
   const steps: Step[] = ['mood']
   if (draft.mood === null) return steps
+  // After a heavy stretch, a gentle card comes first; a quick check-in is just mood and a note.
+  if (draft.care && draft.care !== 'none') steps.push('care')
+  if (draft.care === 'checkin') return [...steps, 'note']
   if (maxGratitudes(branch) > 0) steps.push('gratitude')
   const letter = isLetterNight(draft.date, entries, draft.mood, rhythm) && draft.letterChoice !== 'declined'
   if (isLookbackNight(draft.date, entries, draft.mood, rhythm)) steps.push('lookback')

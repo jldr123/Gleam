@@ -1,4 +1,4 @@
-import { applyImport, backupJSON, backupText, BackupError, needsBackupReminder, parseBackup, planImport } from './backup'
+import { applyImport, backupJSON, backupText, BackupError, hasDefaultSettings, mergeHelpChecks, needsBackupReminder, parseBackup, planImport, restoredSettings, settingsDiffer } from './backup'
 import { formatLongDate } from './dates'
 import { STORE_VERSION } from './migrate'
 import { DEFAULT_BACKUP, DEFAULT_SETTINGS } from './types'
@@ -11,7 +11,7 @@ const entries = {
 
 describe('backup files', () => {
   it('round-trips a backup', () => {
-    const json = backupJSON(entries, DEFAULT_SETTINGS, new Date('2026-10-20T10:00:00Z'))
+    const json = backupJSON(entries, DEFAULT_SETTINGS, [], new Date('2026-10-20T10:00:00Z'))
     const file = parseBackup(json)
     expect(file.version).toBe(STORE_VERSION)
     expect(file.exportedAt).toBe('2026-10-20T10:00:00.000Z')
@@ -83,5 +83,41 @@ describe('backup reminder', () => {
     expect(needsBackupReminder(59, old, now)).toBe(false)
     expect(needsBackupReminder(60, old, now)).toBe(true)
     expect(needsBackupReminder(60, { ...old, dismissedAtCount: 45 }, now)).toBe(false)
+  })
+})
+
+describe('restoring settings', () => {
+  const mine = { ...DEFAULT_SETTINGS, name: 'Joe', theme: 'dark' as const }
+  const theirs = { ...DEFAULT_SETTINGS, name: 'Jo', rhythm: { mode: 'some' as const, nights: [1, 4] }, reminderTime: '22:00' }
+
+  it('knows when this phone still has its default settings', () => {
+    expect(hasDefaultSettings(DEFAULT_SETTINGS)).toBe(true)
+    expect(hasDefaultSettings(mine)).toBe(false)
+    expect(hasDefaultSettings({ ...DEFAULT_SETTINGS, reminderTime: '20:00' })).toBe(false)
+  })
+
+  it('brings back name, theme, rhythm and reflection time', () => {
+    expect(restoredSettings(mine, theirs)).toEqual(theirs)
+    expect(settingsDiffer(mine, theirs)).toBe(true)
+    expect(settingsDiffer(theirs, { ...theirs })).toBe(false)
+  })
+
+  it('keeps settings and help checks in the backup file', () => {
+    const json = backupJSON({}, theirs, [{ date: '2026-10-01', answer: 'yes' }])
+    const file = parseBackup(json)
+    expect(file.settings).toEqual(theirs)
+    expect(file.helpChecks).toEqual([{ date: '2026-10-01', answer: 'yes' }])
+  })
+
+  it('merges help checks by date, keeping this phone on a clash', () => {
+    expect(
+      mergeHelpChecks([{ date: '2026-10-01', answer: 'yes' }], [
+        { date: '2026-10-01', answer: 'notReally' },
+        { date: '2026-09-01', answer: 'sortOf' },
+      ]),
+    ).toEqual([
+      { date: '2026-09-01', answer: 'sortOf' },
+      { date: '2026-10-01', answer: 'yes' },
+    ])
   })
 })

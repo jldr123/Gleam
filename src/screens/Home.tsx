@@ -1,10 +1,12 @@
 import { motion } from 'framer-motion'
+import { InstallSteps } from '../components/evening'
 import { Button, Card, Chevron, Sparkle } from '../components/ui'
 import { useNow } from '../hooks'
 import { needsBackupReminder } from '../lib/backup'
 import { formatLongDate, greeting, isEvening } from '../lib/dates'
 import { whyLineFor } from '../lib/prompts'
 import { resurface } from '../lib/stats'
+import { isReflectionTime, isStandalone } from '../lib/reminder'
 import { isReflectionNight } from '../lib/rhythm'
 import { computeStreak } from '../lib/streak'
 import { useStore } from '../store'
@@ -17,7 +19,10 @@ export function Home() {
   const draft = useStore((s) => s.draft)
   const name = useStore((s) => s.settings.name)
   const rhythm = useStore((s) => s.settings.rhythm)
+  const reminderTime = useStore((s) => s.settings.reminderTime)
   const backup = useStore((s) => s.backup)
+  const installDismissed = useStore((s) => s.installDismissed)
+  const dismissInstall = useStore((s) => s.dismissInstall)
   const dismissBackupReminder = useStore((s) => s.dismissBackupReminder)
   const startReflection = useStore((s) => s.startReflection)
   const go = useUI((s) => s.go)
@@ -27,9 +32,12 @@ export function Home() {
   const inProgress = draft?.date === today && !done
   const streak = computeStreak(entries, today, rhythm)
   const restNight = !done && !inProgress && !isReflectionNight(today, rhythm)
-  const remindBackup = needsBackupReminder(Object.keys(entries).length, backup, now.getTime())
+  // One card at a time: installing matters most on iPhone, since Safari can clear a site's data.
+  const suggestInstall = !installDismissed && !isStandalone()
+  const remindBackup = !suggestInstall && needsBackupReminder(Object.keys(entries).length, backup, now.getTime())
   const memory = resurface(entries, today)
   const evening = isEvening(now)
+  const reflectionTime = !done && !restNight && isReflectionTime(now, reminderTime)
 
   const begin = () => {
     startReflection()
@@ -51,7 +59,8 @@ export function Home() {
         transition={{ duration: 0.8 }}
         className="flex flex-1 flex-col items-center justify-center text-center"
       >
-        <Sparkle className="mb-6 h-10 w-10 text-accent" />
+        <Sparkle className={`mb-6 h-10 w-10 text-accent ${reflectionTime ? 'animate-pulse [animation-duration:3s]' : ''}`} />
+        {reflectionTime && <div className="mb-3 text-xs font-semibold tracking-wide text-accent uppercase">It's your reflection time</div>}
         <h1 className="font-serif text-[34px] leading-tight font-light">
           {greeting(now)}
           {name ? `, ${name}` : ''}.
@@ -89,7 +98,11 @@ export function Home() {
         ) : (
           <>
             <p className="mt-4 max-w-[19rem] text-[15px] leading-relaxed text-muted">
-              {evening ? whyLineFor(today) : 'Come back this evening for a few quiet minutes on your day.'}
+              {reflectionTime
+                ? 'A few quiet minutes on your day, then rest.'
+                : evening
+                  ? whyLineFor(today)
+                  : 'Come back this evening for a few quiet minutes on your day.'}
             </p>
             <Button className="mt-8 px-9" onClick={begin}>
               {inProgress ? 'Carry on reflecting' : 'Reflect on today'}
@@ -100,6 +113,18 @@ export function Home() {
       </motion.div>
 
       <div className="safe-bottom flex flex-col gap-3 pb-2">
+        {suggestInstall && (
+          <Card className="text-left">
+            <div className="flex items-start justify-between gap-3">
+              <div className="text-[15px] font-semibold">Keep Gleam on your Home Screen</div>
+              <button onClick={dismissInstall} className="-mt-1 -mr-2 shrink-0 px-2 py-1 text-sm whitespace-nowrap text-faint" aria-label="Dismiss">
+                Not now
+              </button>
+            </div>
+            <p className="mt-1 text-sm leading-relaxed text-muted">It keeps your reflections safer on iPhone and gets Gleam ready for reminders.</p>
+            <InstallSteps />
+          </Card>
+        )}
         {remindBackup && (
           <Card className="text-left">
             <div className="text-[15px] font-semibold">{Object.keys(entries).length} evenings saved</div>
@@ -114,7 +139,7 @@ export function Home() {
             </div>
           </Card>
         )}
-        {!remindBackup && memory && (
+        {!remindBackup && !suggestInstall && memory && (
           <Card className="text-left">
             <div className="text-xs text-faint">{memory.lead}</div>
             <div className="mt-1.5 font-serif text-lg leading-snug">{memory.gratitude.text}</div>
@@ -126,7 +151,7 @@ export function Home() {
             <div className="text-[15px] font-semibold">Your gratitude bank</div>
             <div className="mt-0.5 text-sm text-muted">
               {streak.nights > 0
-                ? `${streak.nights} ${rhythm.mode === 'some' ? 'chosen ' : ''}${streak.nights === 1 ? 'night' : 'nights'} in a row${streak.restUsed ? ', with a rest night' : ''}`
+                ? `${streak.nights} ${streak.nights === 1 ? 'night' : 'nights'} ${rhythm.mode === 'some' ? 'on your rhythm' : 'in a row'}${streak.restUsed ? ', with a night off' : ''}`
                 : 'Everything you save lives here'}
             </div>
           </div>

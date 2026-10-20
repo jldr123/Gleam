@@ -14,7 +14,7 @@ export interface Streak {
 
 /**
  * Walks back from today over the nights the user chose to reflect on; other
- * nights neither count nor break the run. Today only counts once it's done,
+ * nights never break the run, and count when they reflected anyway. Today only counts once it's done,
  * so an evening not yet reflected never breaks the streak. A missed night is
  * forgiven if no other chosen night was missed in the previous seven days.
  */
@@ -28,11 +28,12 @@ export function computeStreak(entries: Record<string, Entry>, today: string, rhy
   let restUsed = false
 
   for (let i = 0, day = today; day >= earliest; i++, day = addDays(day, -1)) {
-    if (!isReflectionNight(day, rhythm)) continue
     if (entries[day]) {
       nights++
       continue
     }
+    // A rest night neither breaks the run nor counts, unless they reflected anyway (above).
+    if (!isReflectionNight(day, rhythm)) continue
     if (day === today) continue // tonight isn't over yet
     // Two misses within a week of each other end the run.
     if (lastMissAt !== null && i - lastMissAt < REST_WINDOW_DAYS) break

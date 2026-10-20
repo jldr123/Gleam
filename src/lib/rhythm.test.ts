@@ -42,6 +42,14 @@ describe('streak with a rhythm', () => {
     expect(computeStreak(missed, '2026-10-20', sunWed)).toEqual({ nights: 3, restUsed: true })
   })
 
+  it('counts a rest night reflected anyway, and never breaks on one', () => {
+    // Tuesday 20th is a rest night; reflecting anyway adds to the run.
+    const withRest = { ...entries, '2026-10-20': entry('2026-10-20'), '2026-10-16': entry('2026-10-16') }
+    expect(computeStreak(withRest, '2026-10-20', sunWed)).toEqual({ nights: 6, restUsed: false })
+    // A rest night with no entry today doesn't break it either.
+    expect(computeStreak({ '2026-10-16': entry('2026-10-16') }, '2026-10-20', sunWed).nights).toBe(1)
+  })
+
   it('ends after two missed chosen nights within a week', () => {
     const { '2026-10-14': _a, '2026-10-11': _b, ...missed } = entries
     expect(computeStreak(missed, '2026-10-20', sunWed).nights).toBe(1)

@@ -5,9 +5,15 @@ export interface Prompt {
   id: string
   lens: Lens
   text: string
+  /** Kept so older entries still know their lens, but never asked again. */
+  retired?: boolean
 }
 
-/** Gentle, open questions, grouped by lens. Ids are stored on entries, so never rename one. */
+/**
+ * Gentle, open questions, grouped by lens. Ids are stored on entries, so
+ * never rename one; retire it instead. Entries keep the text they were
+ * asked, so rewording a prompt never changes what the bank shows.
+ */
 export const PROMPTS: Prompt[] = [
   // People: gratitude towards others is the strongest kind.
   { id: 'easier', lens: 'people', text: 'Who made today a little easier? What did they do?' },
@@ -20,10 +26,13 @@ export const PROMPTS: Prompt[] = [
 
   // Subtraction: imagining something gone beats counting it.
   { id: 'without', lens: 'subtraction', text: 'Picture today without one thing you have. What would be missing?' },
-  { id: 'nevermet', lens: 'subtraction', text: 'Imagine you had never met someone close to you. What would be different?' },
-  { id: 'shelter', lens: 'subtraction', text: 'What would tonight feel like without your bed, your home or your warmth?' },
+  // Reworded from "Imagine you had never met someone close to you", which could hurt someone grieving.
+  { id: 'nevermet', lens: 'subtraction', text: 'Who are you glad crossed your path?' },
+  // Reworded from imagining tonight without a bed or home, jarring for anyone without a stable one.
+  { id: 'shelter', lens: 'subtraction', text: 'What do you like about where you are tonight?' },
   { id: 'routine', lens: 'subtraction', text: 'Which part of your routine would you miss most if it vanished?' },
-  { id: 'granted', lens: 'subtraction', text: 'What did you take for granted today that some people go without?' },
+  // Reworded from comparisons with people who go without, which can turn into guilt.
+  { id: 'granted', lens: 'subtraction', text: 'What small comfort did you have today?' },
   { id: 'younger', lens: 'subtraction', text: 'What would your younger self be glad you have now?' },
 
   // Savour: replaying a moment strengthens it.
@@ -35,6 +44,10 @@ export const PROMPTS: Prompt[] = [
   { id: 'calm', lens: 'savour', text: 'When did you feel most at ease today?' },
   { id: 'place', lens: 'savour', text: 'Where were you when you felt good today?' },
   { id: 'surprise', lens: 'savour', text: 'What surprised you today, in a good way?' },
+  // Awe: noticing something bigger than yourself.
+  { id: 'beautiful', lens: 'savour', text: 'What did you see today that was beautiful?' },
+  { id: 'stoplook', lens: 'savour', text: 'What made you stop and look today?' },
+  { id: 'bigger', lens: 'savour', text: 'What felt bigger than you today, in a good way?' },
 
   // Self-credit: your own effort counts too.
   { id: 'proud', lens: 'selfCredit', text: 'What did you handle well today?' },
@@ -67,7 +80,9 @@ export const PROMPTS: Prompt[] = [
   { id: 'enough', lens: 'ordinary', text: 'What about today was enough, just as it was?' },
   { id: 'noticed', lens: 'ordinary', text: 'What did you notice today that you usually overlook?' },
   { id: 'worked', lens: 'ordinary', text: 'What everyday thing worked well today?' },
-  { id: 'home', lens: 'ordinary', text: 'What do you like about the place you sleep tonight?' },
+  // Retired: too close to "What do you like about where you are tonight?" below.
+  { id: 'home', lens: 'ordinary', text: 'What do you like about the place you sleep tonight?', retired: true },
+
   { id: 'object', lens: 'ordinary', text: 'What object made your day a little easier?' },
   { id: 'gift', lens: 'ordinary', text: 'What did today give you that you did not expect?' },
   { id: 'outside', lens: 'ordinary', text: 'What did you see outside today?' },
@@ -100,6 +115,9 @@ export const LOOKBACK = { id: 'lookback', text: 'Which moment from this week wou
 
 /** A deeper night's letter stands in for the lens. */
 export const LETTER = { id: 'letter', text: 'A thank-you letter' }
+
+/** A quick check-in after a heavy stretch: mood and a note only. */
+export const CHECKIN = { id: 'checkin', text: 'A quick check-in' }
 
 /** A prompt is not repeated within this many days. */
 export const PROMPT_REPEAT_DAYS = 21
@@ -156,7 +174,7 @@ export function promptOptions(date: string, entries: Record<string, Entry>, mood
 
   const recent = new Set(past.filter((e) => daysBetween(e.date, date) <= PROMPT_REPEAT_DAYS).map((e) => e.promptId))
   const perLens = ordered.map((lens) => {
-    const all = PROMPTS.filter((p) => p.lens === lens)
+    const all = PROMPTS.filter((p) => p.lens === lens && !p.retired)
     const fresh = all.filter((p) => !recent.has(p.id))
     return (fresh.length ? fresh : all).sort((a, b) => hash(date + a.id) - hash(date + b.id))
   })
