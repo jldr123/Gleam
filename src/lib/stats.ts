@@ -1,5 +1,5 @@
-import { addDays, daysBetween } from './dates'
-import type { Entry, Mood } from './types'
+import { addDays, daysBetween, formatShortDay } from './dates'
+import type { Entry, Gratitude, Mood } from './types'
 
 const STOPWORDS = new Set(
   `a about after all also am an and any are as at be because been being but by can could did do does doing
@@ -7,7 +7,7 @@ const STOPWORDS = new Set(
   made make me more most my myself no not now of off on once one only or other our out over really so some
   still such than that the their them then there these they this those through to today too up us very was
   we well were what when where which while who why will with would you your yours day days thing things
-  time grateful thankful lot little bit good great nice felt feel feeling being able`.split(/\s+/),
+  time grateful thankful lot little bit good great nice felt feel feeling being able long`.split(/\s+/),
 )
 
 export interface Theme {
@@ -22,7 +22,7 @@ export function topThemes(entries: Entry[], limit = 5): Theme[] {
     // Count each word once per night so one long entry doesn't dominate.
     const seen = new Set<string>()
     for (const g of e.gratitudes) {
-      for (const raw of g.toLowerCase().match(/[a-z][a-z']+/g) ?? []) {
+      for (const raw of g.text.toLowerCase().match(/[a-z][a-z']+/g) ?? []) {
         const word = raw.replace(/'s$/, '')
         if (word.length < 3 || STOPWORDS.has(word)) continue
         seen.add(word)
@@ -49,28 +49,50 @@ export function moodWeek(entries: Record<string, Entry>, today: string): { date:
   })
 }
 
-export interface Resurfaced {
-  entry: Entry
-  gratitude: string
-  label: string
+export function thanksSent(entries: Entry[]): number {
+  return entries.reduce((n, e) => n + e.thanks.length, 0)
 }
 
-/** A past gratitude to show again: one from a week, a month or a year ago if there is one. */
+/** Resurfacing waits until there is enough history for it to feel like a memory. */
+export const RESURFACE_MIN_ENTRIES = 7
+
+export interface Resurfaced {
+  entry: Entry
+  gratitude: Gratitude
+  /** e.g. "A month ago you were grateful for". */
+  lead: string
+}
+
+const detailed = (g: Gratitude) => g.because.trim().length > 0 || g.text.trim().length >= 30
+
+/**
+ * A past gratitude for the home screen: one from exactly a year or a month
+ * ago if there is one, otherwise a starred or detailed entry from more than a
+ * week ago, picked by date so it stays put all day.
+ */
 export function resurface(entries: Record<string, Entry>, today: string): Resurfaced | null {
+  const all = Object.values(entries)
+  if (all.length < RESURFACE_MIN_ENTRIES) return null
   const anniversaries: [number, string][] = [
-    [365, 'A year ago'],
-    [30, 'A month ago'],
-    [7, 'A week ago'],
+    [365, 'A year ago you were grateful for'],
+    [30, 'A month ago you were grateful for'],
   ]
-  for (const [days, label] of anniversaries) {
+  for (const [days, lead] of anniversaries) {
     const e = entries[addDays(today, -days)]
-    if (e?.gratitudes.length) return { entry: e, gratitude: pick(e.gratitudes, today), label }
+    if (e?.gratitudes.length) return { entry: e, gratitude: best(e.gratitudes, today), lead }
   }
-  const older = Object.values(entries).filter((e) => e.gratitudes.length && daysBetween(e.date, today) >= 3)
-  if (older.length === 0) return null
-  const e = pick(older, today)
-  const days = daysBetween(e.date, today)
-  return { entry: e, gratitude: pick(e.gratitudes, e.date + today), label: `${days} days ago` }
+  const older = all.filter((e) => e.gratitudes.length && daysBetween(e.date, today) > 7)
+  const special = older.filter((e) => e.starred || e.gratitudes.some(detailed))
+  const pool = special.length ? special : older
+  if (pool.length === 0) return null
+  const e = pick(pool, today)
+  return { entry: e, gratitude: best(e.gratitudes, today), lead: `On ${formatShortDay(e.date)} you were grateful for` }
+}
+
+/** Prefer a gratitude with a reason, since those are the nicest to reread. */
+function best(gratitudes: Gratitude[], seed: string): Gratitude {
+  const withWhy = gratitudes.filter(detailed)
+  return pick(withWhy.length ? withWhy : gratitudes, seed)
 }
 
 function pick<T>(items: T[], seed: string): T {

@@ -86,8 +86,9 @@ export function Home() {
       <div className="safe-bottom flex flex-col gap-3 pb-2">
         {memory && (
           <Card className="text-left">
-            <div className="text-xs font-semibold tracking-wide text-faint uppercase">{memory.label}</div>
-            <div className="mt-1.5 font-serif text-lg leading-snug">"{memory.gratitude}"</div>
+            <div className="text-xs text-faint">{memory.lead}</div>
+            <div className="mt-1.5 font-serif text-lg leading-snug">{memory.gratitude.text}</div>
+            {memory.gratitude.because && <div className="mt-1 text-sm text-muted italic">because {memory.gratitude.because}</div>}
           </Card>
         )}
         <button onClick={() => go('bank')} className="flex items-center justify-between rounded-3xl border border-line bg-surface px-5 py-4 text-left">
