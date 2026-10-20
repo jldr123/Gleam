@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type Screen = 'home' | 'reflect' | 'bank' | 'settings'
+export type Screen = 'home' | 'reflect' | 'bank' | 'settings' | 'backup'
 
 interface UI {
   screen: Screen

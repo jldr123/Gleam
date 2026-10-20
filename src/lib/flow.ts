@@ -1,7 +1,7 @@
-import { addDays, weekday } from './dates'
-import { findPerson } from './people'
+import { addDays, daysBetween, weekday } from './dates'
+import { findPerson, looksLikeName, type Person, type ThanksSource } from './people'
 import { moodBranch, type Branch } from './prompts'
-import type { Draft, Entry, Mood, Step } from './types'
+import { DEFAULT_SETTINGS, type Draft, type Entry, type Mood, type Rhythm, type Step } from './types'
 
 export const SUPPORT_URL = 'https://findahelpline.com'
 
@@ -15,43 +15,90 @@ export function weekEntries(date: string, entries: Record<string, Entry>): Entry
   return Array.from({ length: 6 }, (_, i) => entries[addDays(date, i - 6)]).filter((e): e is Entry => !!e)
 }
 
-/** Sundays with at least two other nights this week swap the lens for a look-back. */
-export function isLookbackNight(date: string, entries: Record<string, Entry>, mood: Mood | null): boolean {
-  return weekday(date) === 0 && moodBranch(mood) !== 'veryLow' && weekEntries(date, entries).length >= 2
+/**
+ * Sundays with enough of the week swap the lens for a look-back: two other
+ * nights when reflecting nightly, one when reflecting a few nights a week.
+ */
+export function isLookbackNight(date: string, entries: Record<string, Entry>, mood: Mood | null, rhythm: Rhythm = DEFAULT_SETTINGS.rhythm): boolean {
+  const needed = rhythm.mode === 'nightly' ? 2 : 1
+  return weekday(date) === 0 && moodBranch(mood) !== 'veryLow' && weekEntries(date, entries).length >= needed
 }
 
+/** A deeper night comes round about once a month, after a few weeks of reflecting. */
+export const LETTER_EVERY_DAYS = 28
+export const LETTER_MIN_ENTRIES = 10
+
+/**
+ * Whether tonight offers the optional thank-you letter instead of the lens.
+ * Only on normal-mood nights, never on a look-back night, and only once
+ * a month has passed since the last offer, whether or not it was taken.
+ * A date hash spreads the offer over a few nights rather than the same weekday.
+ */
+export function isLetterNight(date: string, entries: Record<string, Entry>, mood: Mood | null, rhythm: Rhythm = DEFAULT_SETTINGS.rhythm): boolean {
+  if (mood === null || moodBranch(mood) !== 'normal' || isLookbackNight(date, entries, mood, rhythm)) return false
+  if (entries[date]?.letterOffered) return true
+  const past = Object.values(entries).filter((e) => e.date < date)
+  if (past.length < LETTER_MIN_ENTRIES) return false
+  const offers = past.filter((e) => e.letterOffered).map((e) => e.date)
+  const since = offers.length ? daysBetween(offers.reduce((a, b) => (a > b ? a : b)), date) : Infinity
+  if (since < LETTER_EVERY_DAYS) return false
+  // Once due, the offer turns up within about a week; on a few-nights rhythm, the first chosen night.
+  if (rhythm.mode === 'some' || since >= LETTER_EVERY_DAYS + 7) return true
+  let h = 0
+  for (const c of date) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return h % 3 === 0
+}
+
+type FlowDraft = Pick<Draft, 'date' | 'mood' | 'gratitudes' | 'promptAnswer'> & Partial<Pick<Draft, 'letterChoice'>>
+
 /** The steps for tonight, in order. Recomputed as the draft changes, since mood and names reshape the flow. */
-export function stepsFor(draft: Pick<Draft, 'date' | 'mood' | 'gratitudes' | 'promptAnswer'>, entries: Record<string, Entry>): Step[] {
+export function stepsFor(draft: FlowDraft, entries: Record<string, Entry>, rhythm: Rhythm = DEFAULT_SETTINGS.rhythm): Step[] {
   const branch = moodBranch(draft.mood)
   const steps: Step[] = ['mood']
   if (draft.mood === null) return steps
   if (maxGratitudes(branch) > 0) steps.push('gratitude')
-  steps.push(isLookbackNight(draft.date, entries, draft.mood) ? 'lookback' : 'prompt')
-  if (personFromDraft(draft)) steps.push('thanks')
+  const letter = isLetterNight(draft.date, entries, draft.mood, rhythm) && draft.letterChoice !== 'declined'
+  if (isLookbackNight(draft.date, entries, draft.mood, rhythm)) steps.push('lookback')
+  else steps.push(letter ? 'letter' : 'prompt')
+  // A letter night already thanks someone, so it skips the short thank-you.
+  if (!letter && personFromDraft(draft)) steps.push('thanks')
   steps.push('note')
   return steps
 }
 
-export function personFromDraft(draft: Pick<Draft, 'gratitudes' | 'promptAnswer'>) {
+/** The first person tonight's words name, with the words to build a thank-you from. */
+export function personFromDraft(draft: Pick<Draft, 'gratitudes' | 'promptAnswer'>): (Person & { source: ThanksSource }) | null {
   for (const g of draft.gratitudes) {
-    const p = findPerson(`${g.text} ${g.because}`)
-    if (p) return { ...p, about: g }
+    const p = findPerson(`${g.text}. ${g.because}`)
+    if (p) return { ...p, source: { text: g.text, because: g.because } }
   }
   const p = findPerson(draft.promptAnswer)
-  return p ? { ...p, about: null } : null
+  return p ? { ...p, source: { text: draft.promptAnswer } } : null
 }
 
-const GENERIC = new Set([
-  'family', 'health', 'friends', 'friend', 'food', 'home', 'life', 'work', 'job', 'money', 'love', 'everything',
-  'nothing', 'sleep', 'weather', 'my family', 'my health', 'my friends', 'my job', 'my home', 'my life', 'my kids',
-  'kids', 'parents', 'my parents', 'god', 'coffee', 'music', 'nature', 'people', 'today', 'water', 'house',
+const GENERIC_PEOPLE = new Set([
+  'family', 'friends', 'friend', 'kids', 'children', 'parents', 'people', 'partner', 'loved ones', 'my family',
+  'my friends', 'my kids', 'my children', 'my parents', 'my partner', 'my loved ones', 'colleagues', 'team', 'my team',
 ])
 
-/** A one-word or very general entry, which gets a gentle nudge to be specific. */
-export function isGeneric(text: string): boolean {
+const GENERIC_THINGS = new Set([
+  'health', 'my health', 'food', 'home', 'my home', 'house', 'my house', 'life', 'my life', 'work', 'my work', 'job',
+  'my job', 'money', 'love', 'everything', 'nothing', 'sleep', 'weather', 'god', 'coffee', 'tea', 'music', 'nature',
+  'today', 'water', 'books', 'my bed', 'bed', 'pets', 'my dog', 'my cat', 'exercise', 'rest', 'peace', 'sunshine',
+])
+
+/**
+ * A gentle placeholder asking for something specific when an entry is a
+ * single word or very general, or null when it already reads specific. It
+ * never blocks saving.
+ */
+export function specificityNudge(text: string): string | null {
   const t = text.trim().toLowerCase().replace(/[.!]+$/, '')
-  if (!t) return false
-  return GENERIC.has(t) || (t.split(/\s+/).length === 1 && t.length <= 12)
+  if (!t) return null
+  const single = !t.includes(' ')
+  if (GENERIC_PEOPLE.has(t) || (single && (findPerson(text) || looksLikeName(text.trim())))) return 'What about them today?'
+  if (GENERIC_THINGS.has(t) || (single && t.length <= 12)) return 'What made it good today?'
+  return null
 }
 
 const CLOSING: Record<Branch, string[]> = {

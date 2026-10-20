@@ -1,9 +1,11 @@
 import { motion } from 'framer-motion'
 import { Button, Card, Chevron, Sparkle } from '../components/ui'
 import { useNow } from '../hooks'
+import { needsBackupReminder } from '../lib/backup'
 import { formatLongDate, greeting, isEvening } from '../lib/dates'
 import { whyLineFor } from '../lib/prompts'
 import { resurface } from '../lib/stats'
+import { isReflectionNight } from '../lib/rhythm'
 import { computeStreak } from '../lib/streak'
 import { useStore } from '../store'
 import { useUI } from '../ui'
@@ -14,13 +16,18 @@ export function Home() {
   const entries = useStore((s) => s.entries)
   const draft = useStore((s) => s.draft)
   const name = useStore((s) => s.settings.name)
+  const rhythm = useStore((s) => s.settings.rhythm)
+  const backup = useStore((s) => s.backup)
+  const dismissBackupReminder = useStore((s) => s.dismissBackupReminder)
   const startReflection = useStore((s) => s.startReflection)
   const go = useUI((s) => s.go)
   const setOpenEntry = useUI((s) => s.setOpenEntry)
 
   const done = entries[today]
   const inProgress = draft?.date === today && !done
-  const streak = computeStreak(entries, today)
+  const streak = computeStreak(entries, today, rhythm)
+  const restNight = !done && !inProgress && !isReflectionNight(today, rhythm)
+  const remindBackup = needsBackupReminder(Object.keys(entries).length, backup, now.getTime())
   const memory = resurface(entries, today)
   const evening = isEvening(now)
 
@@ -70,6 +77,15 @@ export function Home() {
               </Button>
             </div>
           </>
+        ) : restNight ? (
+          <>
+            <p className="mt-4 max-w-[19rem] text-[15px] leading-relaxed text-muted">
+              Tonight is a rest night. Nothing to do but wind down and let the day be what it was.
+            </p>
+            <Button variant="ghost" className="mt-8" onClick={begin}>
+              Reflect anyway
+            </Button>
+          </>
         ) : (
           <>
             <p className="mt-4 max-w-[19rem] text-[15px] leading-relaxed text-muted">
@@ -84,7 +100,21 @@ export function Home() {
       </motion.div>
 
       <div className="safe-bottom flex flex-col gap-3 pb-2">
-        {memory && (
+        {remindBackup && (
+          <Card className="text-left">
+            <div className="text-[15px] font-semibold">{Object.keys(entries).length} evenings saved</div>
+            <p className="mt-1 text-sm leading-relaxed text-muted">They only live on this phone. Keep a copy somewhere safe?</p>
+            <div className="mt-3 flex gap-2">
+              <Button variant="quiet" className="px-4 py-2 text-sm" onClick={() => go('backup')}>
+                Back up now
+              </Button>
+              <Button variant="ghost" className="px-3 py-2 text-sm" onClick={dismissBackupReminder}>
+                Not now
+              </Button>
+            </div>
+          </Card>
+        )}
+        {!remindBackup && memory && (
           <Card className="text-left">
             <div className="text-xs text-faint">{memory.lead}</div>
             <div className="mt-1.5 font-serif text-lg leading-snug">{memory.gratitude.text}</div>
@@ -96,7 +126,7 @@ export function Home() {
             <div className="text-[15px] font-semibold">Your gratitude bank</div>
             <div className="mt-0.5 text-sm text-muted">
               {streak.nights > 0
-                ? `${streak.nights} ${streak.nights === 1 ? 'night' : 'nights'} in a row${streak.restUsed ? ', with a rest night' : ''}`
+                ? `${streak.nights} ${rhythm.mode === 'some' ? 'chosen ' : ''}${streak.nights === 1 ? 'night' : 'nights'} in a row${streak.restUsed ? ', with a rest night' : ''}`
                 : 'Everything you save lives here'}
             </div>
           </div>

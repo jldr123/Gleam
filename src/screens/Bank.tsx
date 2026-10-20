@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Card, Star, TopBar } from '../components/ui'
 import { formatLongDate, formatMonth, weekdayLetter } from '../lib/dates'
+import { finishedMonths, monthKey, type MonthSummary } from '../lib/months'
 import { moodWeek, thanksSent, topThemes, totalGratitudes } from '../lib/stats'
 import { computeStreak } from '../lib/streak'
 import { MOODS, type Entry } from '../lib/types'
@@ -33,6 +34,7 @@ export function Bank() {
   }
 
   const months = groupByMonth(list)
+  const summaries = new Map(finishedMonths(list, today).map((m) => [m.month, m]))
 
   return (
     <div className="flex min-h-full flex-col">
@@ -41,8 +43,9 @@ export function Bank() {
         <Summary entries={entries} list={list} today={today} />
         {months.map(([month, items]) => (
           <section key={month} className="mt-2">
-            <h3 className="mb-2 px-1 text-xs font-semibold tracking-wide text-faint uppercase">{month}</h3>
+            <h3 className="mb-2 px-1 text-xs font-semibold tracking-wide text-faint uppercase">{formatMonth(`${month}-01`)}</h3>
             <div className="flex flex-col gap-2">
+              {summaries.has(month) && <MonthLookBack summary={summaries.get(month)!} />}
               {items.map((e) => (
                 <EntryRow key={e.date} entry={e} open={openEntry === e.date} onToggle={() => setOpenEntry(openEntry === e.date ? null : e.date)} />
               ))}
@@ -55,7 +58,8 @@ export function Bank() {
 }
 
 function Summary({ entries, list, today }: { entries: Record<string, Entry>; list: Entry[]; today: string }) {
-  const streak = computeStreak(entries, today)
+  const rhythm = useStore((s) => s.settings.rhythm)
+  const streak = computeStreak(entries, today, rhythm)
   const week = moodWeek(entries, today)
   const themes = topThemes(list)
   const thanks = thanksSent(list)
@@ -117,7 +121,7 @@ function EntryRow({ entry, open, onToggle }: { entry: Entry; open: boolean; onTo
         <div className="flex-1">
           <div className="text-xs text-muted">{formatLongDate(entry.date)}</div>
           <div className="mt-1 font-serif text-[17px] leading-snug">
-            {first?.text || entry.moodNote || entry.promptAnswer || 'A quiet night'}
+            {first?.text || (entry.letter && `A letter to ${entry.letter.to}`) || entry.moodNote || entry.promptAnswer || 'A quiet night'}
             {rest.length > 0 && !open && <span className="text-faint"> +{rest.length}</span>}
           </div>
         </div>
@@ -143,6 +147,15 @@ function EntryRow({ entry, open, onToggle }: { entry: Entry; open: boolean; onTo
                   <div className="mt-1">{entry.promptAnswer}</div>
                 </div>
               )}
+              {entry.letter && (
+                <div className="rounded-2xl bg-surface-2 px-4 py-3">
+                  <div className="text-xs text-muted">
+                    A letter to {entry.letter.to}
+                    {entry.letter.sent ? ', sent' : ', kept'}
+                  </div>
+                  <div className="mt-1 font-serif text-[16px] whitespace-pre-line">{entry.letter.text}</div>
+                </div>
+              )}
               {entry.weekPick && <div className="text-xs text-muted">Looked back on the week and kept {entry.weekPick === entry.date ? 'tonight' : formatLongDate(entry.weekPick)}.</div>}
               {entry.thanks.length > 0 && <div className="text-xs text-muted">Said thank you to {[...new Set(entry.thanks.map((t) => t.name))].join(' and ')}.</div>}
               {(mood || entry.moodNote) && (
@@ -159,10 +172,48 @@ function EntryRow({ entry, open, onToggle }: { entry: Entry; open: boolean; onTo
   )
 }
 
+function MonthLookBack({ summary }: { summary: MonthSummary }) {
+  const name = formatMonth(`${summary.month}-01`).split(' ')[0]
+  const parts = [
+    summary.people.length > 0 && { label: 'People who came up', value: summary.people.map((p) => p.name).join(', ') },
+    summary.things.length > 0 && { label: 'And things', value: summary.things.map((t) => t.word).join(', ') },
+  ].filter(Boolean) as { label: string; value: string }[]
+  return (
+    <div className="rounded-3xl border border-line bg-surface-2/60 px-5 py-4">
+      <div className="font-serif text-[19px] leading-snug">
+        {name}, looking back
+      </div>
+      <div className="mt-1 text-sm text-muted">
+        {summary.evenings} {summary.evenings === 1 ? 'evening' : 'evenings'} reflected
+        {summary.letters > 0 ? `, ${summary.letters === 1 ? 'one letter' : `${summary.letters} letters`} written` : ''}
+      </div>
+      {parts.map((p) => (
+        <div key={p.label} className="mt-3">
+          <div className="text-xs text-faint">{p.label}</div>
+          <div className="mt-0.5 text-[15px]">{p.value}</div>
+        </div>
+      ))}
+      {summary.starred.length > 0 && (
+        <div className="mt-3">
+          <div className="text-xs text-faint">Moments you kept</div>
+          <ul className="mt-1 flex flex-col gap-1">
+            {summary.starred.map((e) => (
+              <li key={e.date} className="flex items-start gap-2 font-serif text-[16px] leading-snug">
+                <Star className="mt-1 h-3.5 w-3.5 shrink-0 text-accent" />
+                {e.gratitudes[0]?.text || e.promptAnswer || e.moodNote}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function groupByMonth(list: Entry[]): [string, Entry[]][] {
   const groups = new Map<string, Entry[]>()
   for (const e of list) {
-    const key = formatMonth(e.date)
+    const key = monthKey(e.date)
     groups.set(key, [...(groups.get(key) ?? []), e])
   }
   return [...groups.entries()]

@@ -13,6 +13,8 @@ export const entry = (date: string, gratitudes: string[] = ['tea'], mood: Entry[
   weekPick: null,
   starred: false,
   thanks: [],
+  letter: null,
+  letterOffered: false,
   createdAt: 0,
   updatedAt: 0,
   ...extra,

@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import { useThemeClass } from './hooks'
+import { Backup } from './screens/Backup'
 import { Bank } from './screens/Bank'
 import { Home } from './screens/Home'
 import { Reflect } from './screens/Reflect'
@@ -11,6 +12,7 @@ const screens: Record<Screen, ComponentType> = {
   reflect: Reflect,
   bank: Bank,
   settings: Settings,
+  backup: Backup,
 }
 
 export default function App() {
