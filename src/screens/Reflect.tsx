@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, Sparkle, Star, TopBar } from '../components/ui'
 import { formatShortDay } from '../lib/dates'
-import { closingLine, isGeneric, maxGratitudes, personFromDraft, stepsFor, SUPPORT_URL, weekEntries } from '../lib/flow'
+import { closingLine, maxGratitudes, personFromDraft, specificityNudge, stepsFor, SUPPORT_URL, weekEntries } from '../lib/flow'
 import { thankYouDraft } from '../lib/people'
 import { LENS_LABELS, LOOKBACK, moodBranch } from '../lib/prompts'
 import { MAX_TEXT_LENGTH, MOODS, type Mood, type Step } from '../lib/types'
@@ -12,6 +12,7 @@ import { useUI } from '../ui'
 export function Reflect() {
   const draft = useStore((s) => s.draft)
   const entries = useStore((s) => s.entries)
+  const rhythm = useStore((s) => s.settings.rhythm)
   const updateDraft = useStore((s) => s.updateDraft)
   const saveDraft = useStore((s) => s.saveDraft)
   const go = useUI((s) => s.go)
@@ -24,7 +25,7 @@ export function Reflect() {
   if (closed) return <Close mood={closed.mood} date={closed.date} />
   if (!draft) return null
 
-  const steps = stepsFor(draft, entries)
+  const steps = stepsFor(draft, entries, rhythm)
   // A step can drop out (e.g. "Tell them?" once a name is deleted); land on the next one that exists.
   const at = steps.includes(draft.step) ? steps.indexOf(draft.step) : steps.length - 1
   const step = steps[at]
@@ -61,6 +62,7 @@ export function Reflect() {
           {step === 'gratitude' && <GratitudeStep onNext={next} />}
           {step === 'prompt' && <PromptStep onNext={next} />}
           {step === 'lookback' && <LookbackStep onNext={next} />}
+          {step === 'letter' && <LetterStep onNext={next} />}
           {step === 'thanks' && <ThanksStep onNext={next} />}
           {step === 'note' && <NoteStep onSave={next} />}
         </motion.div>
@@ -99,13 +101,14 @@ const fieldClass =
 function MoodStep({ onNext }: { onNext: (step: Step) => void }) {
   const draft = useStore((s) => s.draft)!
   const entries = useStore((s) => s.entries)
+  const rhythm = useStore((s) => s.settings.rhythm)
   const setMood = useStore((s) => s.setMood)
   const timer = useRef<number | undefined>(undefined)
   useEffect(() => () => clearTimeout(timer.current), [])
 
   const pick = (mood: Mood) => {
     setMood(mood)
-    const steps = stepsFor({ ...draft, mood }, entries)
+    const steps = stepsFor({ ...draft, mood }, entries, rhythm)
     clearTimeout(timer.current)
     // A short pause so the tap registers before the screen moves on.
     timer.current = window.setTimeout(() => onNext(steps[1]), 320)
@@ -161,7 +164,7 @@ function GratitudeStep({ onNext }: { onNext: () => void }) {
               <input
                 value={g.because}
                 onChange={(e) => setGratitude(i, { because: e.target.value })}
-                placeholder={isGeneric(g.text) ? 'What about them today?' : '...because'}
+                placeholder={specificityNudge(g.text) ?? '...because'}
                 maxLength={MAX_TEXT_LENGTH}
                 aria-label="Why it mattered (optional)"
                 className="mt-1 w-full bg-transparent text-[15px] text-muted italic outline-none placeholder:text-faint"
@@ -266,7 +269,7 @@ function ThanksStep({ onNext }: { onNext: () => void }) {
   const draft = useStore((s) => s.draft)!
   const recordThanks = useStore((s) => s.recordThanks)
   const person = personFromDraft(draft)!
-  const [text, setText] = useState(() => thankYouDraft(person))
+  const [text, setText] = useState(() => thankYouDraft(person, person.source))
   const [status, setStatus] = useState<'idle' | 'sent' | 'copied'>(draft.thanks.some((t) => t.name === person.name) ? 'sent' : 'idle')
   const who = person.relation ? person.name.replace(/^my /, 'your ') : person.name
 
@@ -314,6 +317,95 @@ function ThanksStep({ onNext }: { onNext: () => void }) {
             </Button>
           </>
         )}
+      </Footer>
+    </>
+  )
+}
+
+function LetterStep({ onNext }: { onNext: () => void }) {
+  const draft = useStore((s) => s.draft)!
+  const updateDraft = useStore((s) => s.updateDraft)
+  const setLetter = useStore((s) => s.setLetter)
+  const named = personFromDraft(draft)
+  const letter = draft.letter ?? { to: '', text: '', sent: false }
+  const [status, setStatus] = useState<'idle' | 'copied'>('idle')
+
+  if (draft.letterChoice !== 'write') {
+    return (
+      <>
+        <Question
+          eyebrow="A deeper night"
+          title="Write a thank-you letter tonight?"
+          hint="Once in a while, a few lines to someone who mattered: what they did, and what it meant. You can send it or just keep it."
+        />
+        <Footer>
+          <Button
+            className="w-full"
+            onClick={() => {
+              updateDraft({ letterChoice: 'write' })
+              if (!draft.letter && named) setLetter({ to: named.relation ? named.name.replace(/^my /, '') : named.name })
+            }}
+          >
+            Write a letter
+          </Button>
+          <Button variant="ghost" onClick={() => updateDraft({ letterChoice: 'declined', step: 'prompt' })}>
+            Just tonight's question
+          </Button>
+        </Footer>
+      </>
+    )
+  }
+
+  const to = letter.to.trim()
+  const done = () => {
+    if (!letter.text.trim() || !to) updateDraft({ letter: null })
+    onNext()
+  }
+  const send = async () => {
+    const message = letter.text.trim()
+    try {
+      if (navigator.share) {
+        await navigator.share({ text: message })
+        setLetter({ sent: true })
+        onNext()
+        return
+      }
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return
+    }
+    try {
+      await navigator.clipboard.writeText(message)
+      setLetter({ sent: true })
+      setStatus('copied')
+    } catch {
+      setStatus('idle')
+    }
+  }
+
+  return (
+    <>
+      <Question eyebrow="A deeper night" title="Who would you like to thank?" />
+      <input
+        value={letter.to}
+        onChange={(e) => setLetter({ to: e.target.value })}
+        placeholder="Their name"
+        className="mt-5 w-full rounded-full border border-line bg-surface px-5 py-3.5 text-[16px] text-ink outline-none placeholder:text-faint focus:border-accent/50"
+      />
+      <textarea
+        value={letter.text}
+        onChange={(e) => setLetter({ text: e.target.value })}
+        placeholder={`Dear ${to || '...'},\n\nWhat did they do, and what did it mean to you?`}
+        rows={7}
+        className={`mt-3 ${fieldClass}`}
+      />
+      {status === 'copied' && <p className="mt-3 text-sm text-muted">Copied. Paste it into a message to {to}.</p>}
+      <Footer>
+        <Button className="w-full" onClick={send} disabled={!letter.text.trim() || !to}>
+          Send it
+        </Button>
+        <Button variant="ghost" onClick={done}>
+          {letter.text.trim() && to ? 'Keep it in my bank' : 'Not tonight'}
+        </Button>
       </Footer>
     </>
   )

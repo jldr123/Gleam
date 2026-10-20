@@ -1,5 +1,5 @@
 import { addDays } from './dates'
-import { closingLine, isGeneric, isLookbackNight, maxGratitudes, stepsFor } from './flow'
+import { closingLine, isLetterNight, isLookbackNight, LETTER_EVERY_DAYS, maxGratitudes, specificityNudge, stepsFor } from './flow'
 import { entry } from '../test/fixtures'
 import { findPerson, thankYouDraft } from './people'
 import { moodBranch } from './prompts'
@@ -64,20 +64,57 @@ describe('Sunday look-back', () => {
 })
 
 describe('specificity nudge', () => {
-  it('spots generic entries', () => {
-    expect(isGeneric('family')).toBe(true)
-    expect(isGeneric('My health.')).toBe(true)
-    expect(isGeneric('Sam making dinner when I was tired')).toBe(false)
-    expect(isGeneric('')).toBe(false)
+  it('asks about people for people', () => {
+    for (const t of ['family', 'friends', 'kids', 'My parents', 'Sam', 'mum']) expect(specificityNudge(t)).toBe('What about them today?')
+  })
+  it('asks about it for things', () => {
+    for (const t of ['coffee', 'music', 'home', 'My health.', 'sunshine', 'pizza']) expect(specificityNudge(t)).toBe('What made it good today?')
+  })
+  it('leaves specific entries alone', () => {
+    expect(specificityNudge('Sam making dinner when I was tired')).toBeNull()
+    expect(specificityNudge('')).toBeNull()
+  })
+})
+
+describe('deeper letter night', () => {
+  const history = (days: number[], extra = {}) =>
+    Object.fromEntries(days.map((n) => [addDays(MONDAY, -n), entry(addDays(MONDAY, -n), ['tea'], 4, extra)]))
+  const month = Array.from({ length: 40 }, (_, i) => i + 1)
+
+  it('waits for a few weeks of history', () => {
+    expect(isLetterNight(MONDAY, history([1, 2, 3]), 4)).toBe(false)
+  })
+
+  it('never comes on a low or very low night', () => {
+    expect(isLetterNight(MONDAY, history(month), 2)).toBe(false)
+    expect(isLetterNight(MONDAY, history(month), 1)).toBe(false)
+  })
+
+  it('is offered within a week once a month has passed, then not again for a month', () => {
+    const entries = history(month)
+    const offered = Array.from({ length: 7 }, (_, i) => addDays(MONDAY, i)).filter((d) => isLetterNight(d, entries, 4))
+    expect(offered.length).toBeGreaterThan(0)
+    const first = offered[0]
+    entries[first] = entry(first, ['tea'], 4, { letterOffered: true })
+    for (let i = 1; i < LETTER_EVERY_DAYS; i++) expect(isLetterNight(addDays(first, i), entries, 4)).toBe(false)
+  })
+
+  it('replaces the lens and skips the short thank-you, unless declined', () => {
+    const entries = history(month)
+    const night = Array.from({ length: 7 }, (_, i) => addDays(MONDAY, i)).find((d) => isLetterNight(d, entries, 4))!
+    const named = [{ text: 'Sam made dinner', because: '' }]
+    expect(stepsFor({ ...draft(4, named, '', night), letterChoice: 'undecided' }, entries)).toEqual(['mood', 'gratitude', 'letter', 'note'])
+    expect(stepsFor({ ...draft(4, named, '', night), letterChoice: 'declined' }, entries)).toEqual(['mood', 'gratitude', 'prompt', 'thanks', 'note'])
   })
 })
 
 describe('findPerson', () => {
   it('finds names and relations', () => {
-    expect(findPerson('Coffee with Priya')).toEqual({ name: 'Priya', relation: false })
-    expect(findPerson('Sam made dinner')).toEqual({ name: 'Sam', relation: false })
-    expect(findPerson('a long call with mum')).toEqual({ name: 'Mum', relation: false })
-    expect(findPerson('my sister checking in')).toEqual({ name: 'my sister', relation: true })
+    expect(findPerson('Coffee with Priya')).toMatchObject({ name: 'Priya', relation: false })
+    expect(findPerson('Sam made dinner')).toMatchObject({ name: 'Sam', relation: false })
+    expect(findPerson('a long call with mum')).toMatchObject({ name: 'Mum', relation: false })
+    expect(findPerson('my sister checking in')).toMatchObject({ name: 'my sister', relation: true })
+    expect(findPerson('Lunch was nice. Priya called after')).toMatchObject({ name: 'Priya' })
   })
 
   it('leaves out things that are not people', () => {
@@ -86,8 +123,54 @@ describe('findPerson', () => {
     expect(findPerson('I finished early')).toBeNull()
   })
 
-  it('drafts a thank-you that greets by name', () => {
-    expect(thankYouDraft({ name: 'Sam', relation: false })).toMatch(/^Hi Sam, /)
-    expect(thankYouDraft({ name: 'my sister', relation: true })).toMatch(/^Hi, /)
+  it('skips places and brands', () => {
+    expect(findPerson('a walk in Hyde Park')).toBeNull()
+    expect(findPerson('a walk in Regent Park')).toBeNull()
+    expect(findPerson('dinner at Nando’s with the team')).toBeNull()
+    expect(findPerson('the train to Brighton')).toBeNull()
+    expect(findPerson('a postcard from Lisbon')).toBeNull()
+    expect(findPerson('pancakes at Pizza Express')).toBeNull()
+    expect(findPerson('watching Netflix')).toBeNull()
+    expect(findPerson('the view on Arthur Seat')).toBeNull()
+  })
+
+  it('still finds a person alongside a place', () => {
+    expect(findPerson('a walk in Hyde Park with Sam')).toMatchObject({ name: 'Sam' })
+  })
+})
+
+describe('thankYouDraft', () => {
+  const sam = { name: 'Sam', relation: false, match: 'Sam' }
+  const hi = (p: { name: string; relation: boolean; match: string }, text: string, because = '') => thankYouDraft(p, { text, because })
+
+  it('builds the message from their own words', () => {
+    expect(hi(sam, 'Sam covered my shift', 'I could make it to Mum’s')).toBe(
+      'Hi Sam, I was thinking back on today. You covered my shift, and it meant I could make it to Mum’s. Thank you, it really helped.',
+    )
+    expect(hi(sam, 'Sam made dinner', 'I was exhausted and he just took over')).toBe(
+      'Hi Sam, I was thinking back on today. You made dinner. I was exhausted and you just took over. Thank you, it really helped.',
+    )
+  })
+
+  it('thanks them for a shared moment', () => {
+    expect(hi({ name: 'Priya', relation: false, match: 'Priya' }, 'Coffee with Priya', 'she listened properly')).toBe(
+      'Hi Priya, I was thinking back on today. Thank you for the coffee. You listened properly. It meant a lot.',
+    )
+    expect(hi({ name: 'Mum', relation: false, match: 'Mum' }, 'A long call with Mum', 'she always knows what to say')).toBe(
+      'Hi Mum, I was thinking back on today. Thank you for a long call. You always know what to say. It meant a lot.',
+    )
+    expect(hi(sam, 'Laughing with Sam about nothing')).toBe('Hi Sam, I was thinking back on today. Thank you for laughing with me about nothing. It meant a lot.')
+  })
+
+  it('handles relations and prompt answers', () => {
+    expect(hi({ name: 'my sister', relation: true, match: 'sister' }, 'my sister checking in')).toBe('Hi, I was thinking back on today. Thank you for checking in. It meant a lot.')
+    expect(thankYouDraft({ name: 'Priya', relation: false, match: 'Priya' }, { text: 'Priya, who covered for me.' })).toBe(
+      'Hi Priya, I was thinking back on today. You covered for me. Thank you, it really helped.',
+    )
+  })
+
+  it('falls back to a general line when there is nothing to build from', () => {
+    expect(hi(sam, 'Sam')).toBe('Hi Sam, I was thinking back on today and wanted to say thank you. It meant more than you know.')
+    expect(thankYouDraft(sam)).toMatch(/^Hi Sam, .*more than you know\.$/)
   })
 })

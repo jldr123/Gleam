@@ -98,6 +98,9 @@ export const LET_GO = PROMPTS.find((p) => p.id === 'letgo')!
 /** The Sunday look-back stands in for the lens. */
 export const LOOKBACK = { id: 'lookback', text: 'Which moment from this week would you keep?' }
 
+/** A deeper night's letter stands in for the lens. */
+export const LETTER = { id: 'letter', text: 'A thank-you letter' }
+
 /** A prompt is not repeated within this many days. */
 export const PROMPT_REPEAT_DAYS = 21
 

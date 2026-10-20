@@ -1,15 +1,28 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { addDays, logicalDate } from './lib/dates'
-import { isLookbackNight, maxGratitudes } from './lib/flow'
+import { applyImport } from './lib/backup'
+import { isLetterNight, isLookbackNight, maxGratitudes } from './lib/flow'
 import { migrate, STORE_VERSION } from './lib/migrate'
-import { LOOKBACK, moodBranch, promptFor } from './lib/prompts'
-import { DEFAULT_SETTINGS, MAX_TEXT_LENGTH, type Draft, type Entry, type Gratitude, type Mood, type Settings } from './lib/types'
+import { LETTER, LOOKBACK, moodBranch, promptFor } from './lib/prompts'
+import {
+  DEFAULT_BACKUP,
+  DEFAULT_SETTINGS,
+  MAX_TEXT_LENGTH,
+  type BackupState,
+  type Draft,
+  type Entry,
+  type Gratitude,
+  type Letter,
+  type Mood,
+  type Settings,
+} from './lib/types'
 
 interface State {
   entries: Record<string, Entry>
   draft: Draft | null
   settings: Settings
+  backup: BackupState
   /** Developer time travel: offset added to the real clock. */
   clockOffsetMs: number
 
@@ -20,10 +33,14 @@ interface State {
   setMood: (mood: Mood) => void
   shufflePrompt: () => void
   recordThanks: (name: string) => void
+  setLetter: (patch: Partial<Letter>) => void
   saveDraft: () => void
   discardDraft: () => void
 
   updateSettings: (patch: Partial<Settings>) => void
+  recordExport: () => void
+  dismissBackupReminder: () => void
+  importEntries: (incoming: Record<string, Entry>, replace: boolean) => void
   setClockOffset: (ms: number) => void
   seedDemo: (nights: number) => void
   reset: () => void
@@ -47,6 +64,7 @@ export const useStore = create<State>()(
         entries: {},
         draft: null,
         settings: DEFAULT_SETTINGS,
+        backup: DEFAULT_BACKUP,
         clockOffsetMs: 0,
 
         today: () => logicalDate(now()),
@@ -59,7 +77,8 @@ export const useStore = create<State>()(
           if (existing) {
             const { starred: _s, createdAt: _c, updatedAt: _u, ...rest } = existing
             const gratitudes = [...existing.gratitudes, ...blankGratitudes()].slice(0, 3)
-            set({ draft: { ...rest, gratitudes, step: 'mood', promptSkip: 0 } })
+            const letterChoice = existing.letter ? 'write' : existing.letterOffered ? 'declined' : 'undecided'
+            set({ draft: { ...rest, gratitudes, step: 'mood', promptSkip: 0, letterChoice } })
             return
           }
           set({
@@ -76,6 +95,9 @@ export const useStore = create<State>()(
               moodNote: '',
               weekPick: null,
               thanks: [],
+              letter: null,
+              letterOffered: false,
+              letterChoice: 'undecided',
             }),
           })
         },
@@ -123,13 +145,23 @@ export const useStore = create<State>()(
           set({ draft: { ...d, thanks: [...d.thanks, { name, at: Date.now() }] } })
         },
 
+        setLetter: (patch) => {
+          const d = get().draft
+          if (!d) return
+          const letter = { to: '', text: '', sent: false, ...d.letter, ...patch }
+          set({ draft: { ...d, letter: { ...letter, to: letter.to.slice(0, 60), text: letter.text.slice(0, 4000) } } })
+        },
+
         saveDraft: () => {
           const { draft, entries } = get()
           if (!draft) return
-          const { step: _step, promptSkip: _skip, ...rest } = draft
+          const { step: _step, promptSkip: _skip, letterChoice, ...rest } = draft
           const t = Date.now()
           const previous = entries[draft.date]
-          const lookback = isLookbackNight(draft.date, entries, draft.mood)
+          const { rhythm } = get().settings
+          const lookback = isLookbackNight(draft.date, entries, draft.mood, rhythm)
+          const letterNight = !lookback && isLetterNight(draft.date, entries, draft.mood, rhythm)
+          const wroteLetter = letterNight && letterChoice !== 'declined' && !!draft.letter?.text.trim() && !!draft.letter.to.trim()
           const limit = maxGratitudes(moodBranch(draft.mood))
           const entry: Entry = {
             ...rest,
@@ -138,7 +170,10 @@ export const useStore = create<State>()(
               .map((g) => ({ text: g.text.trim(), because: g.because.trim() }))
               .filter((g) => g.text),
             ...(lookback ? { lens: null, promptId: LOOKBACK.id, promptText: LOOKBACK.text } : { weekPick: null }),
-            promptAnswer: lookback ? '' : rest.promptAnswer.trim(),
+            ...(wroteLetter ? { lens: null, promptId: LETTER.id, promptText: LETTER.text } : {}),
+            promptAnswer: lookback || wroteLetter ? '' : rest.promptAnswer.trim(),
+            letter: wroteLetter ? { ...draft.letter!, to: draft.letter!.to.trim(), text: draft.letter!.text.trim() } : null,
+            letterOffered: letterNight,
             moodNote: rest.moodNote.trim(),
             starred: previous?.starred ?? false,
             createdAt: previous?.createdAt ?? t,
@@ -155,6 +190,13 @@ export const useStore = create<State>()(
         discardDraft: () => set({ draft: null }),
 
         updateSettings: (patch) => set({ settings: { ...get().settings, ...patch } }),
+
+        recordExport: () =>
+          set({ backup: { ...get().backup, lastExportAt: Date.now(), entriesAtExport: Object.keys(get().entries).length } }),
+
+        dismissBackupReminder: () => set({ backup: { ...get().backup, dismissedAtCount: Object.keys(get().entries).length } }),
+
+        importEntries: (incoming, replace) => set({ entries: applyImport(get().entries, incoming, replace) }),
         setClockOffset: (clockOffsetMs) => set({ clockOffsetMs }),
 
         seedDemo: (nights) => {
@@ -194,6 +236,8 @@ export const useStore = create<State>()(
               weekPick: null,
               starred: i % 11 === 0,
               thanks: i % 13 === 0 ? [{ name: 'Sam', at: t }] : [],
+              letter: null,
+              letterOffered: false,
               createdAt: t,
               updatedAt: t,
             }
@@ -201,14 +245,14 @@ export const useStore = create<State>()(
           set({ entries })
         },
 
-        reset: () => set({ entries: {}, draft: null, settings: DEFAULT_SETTINGS, clockOffsetMs: 0 }),
+        reset: () => set({ entries: {}, draft: null, settings: DEFAULT_SETTINGS, backup: DEFAULT_BACKUP, clockOffsetMs: 0 }),
       }
     },
     {
       name: 'gleam',
       version: STORE_VERSION,
       migrate: (persisted, version) => migrate(persisted, version) as unknown as State,
-      partialize: ({ entries, draft, settings, clockOffsetMs }) => ({ entries, draft, settings, clockOffsetMs }),
+      partialize: ({ entries, draft, settings, backup, clockOffsetMs }) => ({ entries, draft, settings, backup, clockOffsetMs }),
     },
   ),
 )

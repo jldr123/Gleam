@@ -1,12 +1,13 @@
 import { lensOf } from './prompts'
-import { DEFAULT_SETTINGS, type Entry, type Gratitude, type Mood, type Settings } from './types'
+import { DEFAULT_BACKUP, DEFAULT_SETTINGS, type BackupState, type Entry, type Gratitude, type Mood, type Settings } from './types'
 
-export const STORE_VERSION = 2
+export const STORE_VERSION = 3
 
 export interface Persisted {
   entries: Record<string, Entry>
   draft: null
   settings: Settings
+  backup: BackupState
   clockOffsetMs: number
 }
 
@@ -23,6 +24,13 @@ interface EntryV1 {
   updatedAt: number
 }
 
+/** Version 2 had no letters or rhythm. */
+type EntryV2 = Omit<Entry, 'letter' | 'letterOffered'>
+
+function entryFromV2(e: EntryV2): Entry {
+  return { ...e, letter: null, letterOffered: false }
+}
+
 function entryFromV1(e: EntryV1): Entry {
   return {
     date: e.date,
@@ -36,26 +44,31 @@ function entryFromV1(e: EntryV1): Entry {
     weekPick: null,
     starred: false,
     thanks: [],
+    letter: null,
+    letterOffered: false,
     createdAt: e.createdAt ?? 0,
     updatedAt: e.updatedAt ?? 0,
   }
 }
 
 /**
- * Brings stored data from any older version up to date. Entries are kept;
+ * Brings stored data (or a backup file) from any older version up to date. Entries are kept;
  * an unfinished draft from an older version is dropped since its steps no
  * longer exist.
  */
 export function migrate(persisted: unknown, version: number): Persisted {
-  const old = (persisted ?? {}) as Partial<{ entries: Record<string, unknown>; settings: Settings; clockOffsetMs: number }>
+  const old = (persisted ?? {}) as Partial<{ entries: Record<string, unknown>; settings: Partial<Settings>; backup: BackupState; clockOffsetMs: number }>
   const entries: Record<string, Entry> = {}
   for (const [date, raw] of Object.entries(old.entries ?? {})) {
-    entries[date] = version < 2 ? entryFromV1(raw as EntryV1) : (raw as Entry)
+    if (version < 2) entries[date] = entryFromV1(raw as EntryV1)
+    else if (version < 3) entries[date] = entryFromV2(raw as EntryV2)
+    else entries[date] = raw as Entry
   }
   return {
     entries,
     draft: null,
-    settings: { ...DEFAULT_SETTINGS, ...old.settings },
+    settings: { ...DEFAULT_SETTINGS, ...old.settings, rhythm: { ...DEFAULT_SETTINGS.rhythm, ...old.settings?.rhythm } },
+    backup: { ...DEFAULT_BACKUP, ...old.backup },
     clockOffsetMs: old.clockOffsetMs ?? 0,
   }
 }
