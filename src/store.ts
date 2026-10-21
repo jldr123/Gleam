@@ -5,6 +5,7 @@ import { applyImport, mergeHelpChecks } from './lib/backup'
 import { needsCare } from './lib/care'
 import { isLetterNight, isLookbackNight, maxGratitudes } from './lib/flow'
 import { migrate, STORE_VERSION } from './lib/migrate'
+import { activePacks } from './lib/plus'
 import { CHECKIN, LETTER, LOOKBACK, moodBranch, promptFor } from './lib/prompts'
 import {
   DEFAULT_BACKUP,
@@ -33,8 +34,9 @@ interface State {
   careShownOn: string | null
   helpChecks: HelpCheck[]
   helpAskedOn: string | null
-  installDismissed: boolean
   devTools: boolean
+  plus: boolean
+  yearSeen: number | null
 
   today: () => string
   startReflection: () => void
@@ -52,8 +54,10 @@ interface State {
   dismissBackupReminder: () => void
   importEntries: (incoming: Record<string, Entry>, replace: boolean, helpChecks?: HelpCheck[]) => void
   finishOnboarding: () => void
-  dismissInstall: () => void
   setDevTools: (on: boolean) => void
+  /** Prototype stand-in for the App Store purchase. */
+  setPlus: (on: boolean) => void
+  markYearSeen: (year: number) => void
   markHelpAsked: (date: string) => void
   answerHelp: (date: string, answer: HelpAnswer) => void
   setClockOffset: (ms: number) => void
@@ -73,7 +77,8 @@ export const useStore = create<State>()(
 
       /** Re-picks tonight's prompt for the draft's mood, keeping any shuffle. */
       const withPrompt = (d: Draft): Draft => {
-        const p = promptFor(d.date, get().entries, d.mood, d.promptSkip)
+        const { plus, settings } = get()
+        const p = promptFor(d.date, get().entries, d.mood, d.promptSkip, activePacks(settings, plus))
         return { ...d, lens: p.lens, promptId: p.id, promptText: p.text }
       }
 
@@ -87,8 +92,9 @@ export const useStore = create<State>()(
         careShownOn: null,
         helpChecks: [],
         helpAskedOn: null,
-        installDismissed: false,
         devTools: false,
+        plus: false,
+        yearSeen: null,
 
         today: () => logicalDate(now()),
 
@@ -230,8 +236,9 @@ export const useStore = create<State>()(
         importEntries: (incoming, replace, helpChecks = []) =>
           set({ entries: applyImport(get().entries, incoming, replace), helpChecks: mergeHelpChecks(get().helpChecks, helpChecks) }),
         finishOnboarding: () => set({ onboarded: true }),
-        dismissInstall: () => set({ installDismissed: true }),
         setDevTools: (devTools) => set({ devTools }),
+        setPlus: (plus) => set({ plus }),
+        markYearSeen: (yearSeen) => set({ yearSeen }),
         markHelpAsked: (date) => set({ helpAskedOn: date }),
         answerHelp: (date, answer) => set({ helpChecks: mergeHelpChecks(get().helpChecks, [{ date, answer }]) }),
         setClockOffset: (clockOffsetMs) => set({ clockOffsetMs }),
@@ -320,7 +327,8 @@ export const useStore = create<State>()(
             careShownOn: null,
             helpChecks: [],
             helpAskedOn: null,
-            installDismissed: false,
+            plus: false,
+            yearSeen: null,
           }),
       }
     },
@@ -328,7 +336,7 @@ export const useStore = create<State>()(
       name: 'gleam',
       version: STORE_VERSION,
       migrate: (persisted, version) => migrate(persisted, version) as unknown as State,
-      partialize: ({ entries, draft, settings, backup, clockOffsetMs, onboarded, careShownOn, helpChecks, helpAskedOn, installDismissed, devTools }) => ({
+      partialize: ({ entries, draft, settings, backup, clockOffsetMs, onboarded, careShownOn, helpChecks, helpAskedOn, devTools, plus, yearSeen }) => ({
         entries,
         draft,
         settings,
@@ -338,8 +346,9 @@ export const useStore = create<State>()(
         careShownOn,
         helpChecks,
         helpAskedOn,
-        installDismissed,
         devTools,
+        plus,
+        yearSeen,
       }),
     },
   ),

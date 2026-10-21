@@ -3,9 +3,12 @@ import { useThemeClass } from './hooks'
 import { Backup } from './screens/Backup'
 import { Bank } from './screens/Bank'
 import { Home } from './screens/Home'
+import { Plus } from './screens/Plus'
 import { Reflect } from './screens/Reflect'
 import { Settings } from './screens/Settings'
+import { Stats } from './screens/Stats'
 import { Welcome } from './screens/Welcome'
+import { Year } from './screens/Year'
 import { useStore } from './store'
 import { useUI, type Screen } from './ui'
 
@@ -15,6 +18,9 @@ const screens: Record<Screen, ComponentType> = {
   bank: Bank,
   settings: Settings,
   backup: Backup,
+  stats: Stats,
+  year: Year,
+  plus: Plus,
 }
 
 export default function App() {

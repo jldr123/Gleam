@@ -1,18 +1,18 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useState, type ReactNode } from 'react'
-import { CalendarButton, InstallSteps, RhythmPicker, TimeInput } from '../components/evening'
+import { ReminderButton, RhythmPicker, TimeInput } from '../components/evening'
 import { Button, Card, Sparkle } from '../components/ui'
-import { isStandalone } from '../lib/reminder'
+import { formatTime } from '../lib/reminder'
 import { useStore } from '../store'
 
-type Page = 'why' | 'privacy' | 'evening' | 'install'
+type Page = 'why' | 'privacy' | 'evening' | 'reminder'
 
-/** A short first run, shown once: why it works, privacy, and their evening. Skippable at every step. */
+/** A short first run, shown once: why it works, privacy, their evening and a reminder. Skippable at every step. */
 export function Welcome() {
   const settings = useStore((s) => s.settings)
   const updateSettings = useStore((s) => s.updateSettings)
   const finish = useStore((s) => s.finishOnboarding)
-  const pages: Page[] = ['why', 'privacy', 'evening', ...(isStandalone() ? [] : (['install'] as Page[]))]
+  const pages: Page[] = ['why', 'privacy', 'evening', 'reminder']
   const [at, setAt] = useState(0)
   const page = pages[at]
   const next = () => (at < pages.length - 1 ? setAt(at + 1) : finish())
@@ -59,14 +59,6 @@ export function Welcome() {
             <div className="flex flex-col gap-4 pt-10">
               <h1 className="font-serif text-[28px] leading-tight font-light">Your evening</h1>
               <Card>
-                <div className="flex items-center justify-between">
-                  <label className="text-sm text-muted" htmlFor="welcome-time">
-                    When do you usually wind down?
-                  </label>
-                  <TimeInput id="welcome-time" value={settings.reminderTime} onChange={(reminderTime) => updateSettings({ reminderTime })} />
-                </div>
-              </Card>
-              <Card>
                 <div className="mb-3 text-sm text-muted">How often?</div>
                 <RhythmPicker rhythm={settings.rhythm} onChange={(rhythm) => updateSettings({ rhythm })} />
               </Card>
@@ -84,23 +76,29 @@ export function Welcome() {
               </Card>
             </div>
           )}
-          {page === 'install' && (
+          {page === 'reminder' && (
             <div className="flex flex-col gap-4 pt-10">
-              <h1 className="font-serif text-[28px] leading-tight font-light">Keep Gleam on your Home Screen</h1>
-              <p className="text-[15px] leading-relaxed text-muted">
-                On iPhone, this keeps your reflections safer and gets Gleam ready for reminders. It opens like an app, with no browser bars.
-              </p>
+              <h1 className="font-serif text-[28px] leading-tight font-light">Set your evening reminder</h1>
               <Card>
-                <InstallSteps />
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-muted" htmlFor="welcome-time">
+                    When do you usually wind down?
+                  </label>
+                  <TimeInput id="welcome-time" value={settings.reminderTime} onChange={(reminderTime) => updateSettings({ reminderTime })} />
+                </div>
               </Card>
-              <CalendarButton time={settings.reminderTime} rhythm={settings.rhythm} />
+              <p className="text-[15px] leading-relaxed text-muted">
+                A gentle nudge is what keeps the habit going, so Gleam can remind you at {formatTime(settings.reminderTime)}. Just one a night, and
+                never a guilt trip.
+              </p>
+              <ReminderButton variant="primary" />
             </div>
           )}
         </motion.div>
       </AnimatePresence>
 
       <div className="safe-bottom pt-8 pb-2">
-        <Button className="w-full" onClick={next}>
+        <Button className="w-full" variant={page === 'reminder' ? 'quiet' : 'primary'} onClick={next}>
           {at === pages.length - 1 ? 'Start' : 'Next'}
         </Button>
       </div>

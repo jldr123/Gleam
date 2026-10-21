@@ -40,7 +40,7 @@ async function saveFile(name: string, type: string, content: string): Promise<bo
 type Pending = { file: BackupFile; plan: ImportPlan }
 
 export function Backup() {
-  const go = useUI((s) => s.go)
+  const back = useUI((s) => s.back)
   const entries = useStore((s) => s.entries)
   const settings = useStore((s) => s.settings)
   const backup = useStore((s) => s.backup)
@@ -108,7 +108,7 @@ export function Backup() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <TopBar onBack={() => go('settings')} title="Backup and export" />
+      <TopBar onBack={back} title="Backup and export" />
       <div className="safe-bottom flex flex-col gap-4 px-5 pt-2">
         <Card>
           <div className="font-serif text-[22px] leading-snug font-light">Your reflections live only on this phone.</div>

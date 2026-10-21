@@ -15,16 +15,14 @@ export interface MonthSummary {
 }
 
 /** Relations that are often a different person each time, so counting them together says little. */
-const LOOSE = new Set(['my friend', 'my mate', 'my bestie', 'my colleague', 'my coworker', 'my neighbour', 'my neighbor'])
+export const LOOSE = new Set(['my friend', 'my mate', 'my bestie', 'my colleague', 'my coworker', 'my neighbour', 'my neighbor'])
 
 export const monthKey = (date: string) => date.slice(0, 7)
 
-/** A quiet summary of one month's evenings: who and what came up, and the moments kept. */
-export function summariseMonth(month: string, entries: Entry[]): MonthSummary {
-  const inMonth = entries.filter((e) => monthKey(e.date) === month).sort((a, b) => a.date.localeCompare(b.date))
-
+/** How many evenings each person was named on, counted once per evening. */
+export function countPeople(entries: Entry[]): Map<string, number> {
   const people = new Map<string, number>()
-  for (const e of inMonth) {
+  for (const e of entries) {
     const names = new Set<string>()
     const texts = [...e.gratitudes.flatMap((g) => [g.text, g.because]), e.promptAnswer, e.letter?.to ?? '']
     for (const t of texts) {
@@ -32,22 +30,35 @@ export function summariseMonth(month: string, entries: Entry[]): MonthSummary {
     }
     for (const n of names) people.set(n, (people.get(n) ?? 0) + 1)
   }
-  const topPeople = [...people.entries()]
+  return people
+}
+
+/** The names that came up on at least two evenings, most often first. */
+export function topOf(people: Map<string, number>, limit: number): { name: string; count: number }[] {
+  return [...people.entries()]
     .filter(([, c]) => c >= 2)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 3)
+    .slice(0, limit)
     .map(([name, count]) => ({ name, count }))
+}
 
+/** Top themes with people's names left out, so "sam" never shows up as a thing. */
+export function topThings(entries: Entry[], people: Map<string, number>, limit: number): Theme[] {
   const personWords = new Set([...people.keys(), ...LOOSE].map((n) => n.replace(/^my /, '').toLowerCase()))
-  const things = topThemes(inMonth, 8)
+  return topThemes(entries, limit + 5)
     .filter((t) => !personWords.has(t.word))
-    .slice(0, 3)
+    .slice(0, limit)
+}
 
+/** A quiet summary of one month's evenings: who and what came up, and the moments kept. */
+export function summariseMonth(month: string, entries: Entry[]): MonthSummary {
+  const inMonth = entries.filter((e) => monthKey(e.date) === month).sort((a, b) => a.date.localeCompare(b.date))
+  const people = countPeople(inMonth)
   return {
     month,
     evenings: inMonth.length,
-    people: topPeople,
-    things,
+    people: topOf(people, 3),
+    things: topThings(inMonth, people, 3),
     starred: inMonth.filter((e) => e.starred),
     letters: inMonth.filter((e) => e.letter).length,
   }

@@ -41,11 +41,30 @@ describe('computeStreak', () => {
 
 describe('topThemes', () => {
   it('counts words once per night and drops filler', () => {
-    const list = [entry('a', ['Coffee with Sam', 'Sam made dinner']), entry('b', ['a walk with Sam']), entry('c', ['coffee'])]
+    const list = [
+      entry('a', ['Coffee with Sam', 'Sam made dinner']),
+      entry('b', ['a walk with Sam']),
+      entry('c', ['coffee', 'Sam again']),
+      entry('d', ['coffee in the garden']),
+    ]
     expect(topThemes(list)).toEqual([
-      { word: 'sam', count: 2 },
-      { word: 'coffee', count: 2 },
-    ].sort((a, b) => b.count - a.count || a.word.localeCompare(b.word)))
+      { word: 'coffee', count: 3 },
+      { word: 'sam', count: 3 },
+    ])
+  })
+
+  it('needs three evenings before a theme shows', () => {
+    const list = [entry('a', ['the garden']), entry('b', ['the garden again'])]
+    expect(topThemes(list)).toEqual([])
+    expect(topThemes([...list, entry('c', ['garden'])])).toEqual([{ word: 'garden', count: 3 }])
+  })
+
+  it('leaves out common verbs like call, clean and book', () => {
+    const texts = ['A long call with Mum', 'Finishing the report early', 'Clean sheets', 'A quiet hour with a book', 'Called Dad']
+    const list = ['a', 'b', 'c'].map((d) => entry(d, texts))
+    const words = topThemes(list, 20).map((t) => t.word)
+    for (const w of ['call', 'called', 'clean', 'book', 'finishing', 'quiet', 'hour', 'early']) expect(words).not.toContain(w)
+    expect(words).toEqual(expect.arrayContaining(['report', 'sheets', 'mum', 'dad']))
   })
 })
 

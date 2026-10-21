@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { reminderIcs } from '../lib/reminder'
+import { formatTime } from '../lib/reminder'
+import { enableReminder, reminderKind, reminderMessage } from '../lib/reminders'
 import { toggleNight, WEEKDAYS } from '../lib/rhythm'
 import type { Rhythm } from '../lib/types'
+import { useStore } from '../store'
 import { Button } from './ui'
 
 const rhythms: { value: Rhythm['mode']; label: string }[] = [
@@ -58,57 +60,32 @@ export function TimeInput({ value, onChange, id }: { value: string; onChange: (t
   )
 }
 
-/** The two steps to add Gleam to an iPhone home screen. */
-export function InstallSteps() {
-  return (
-    <ol className="mt-3 flex flex-col gap-2 text-[15px] leading-snug">
-      <li className="flex items-center gap-3">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold">1</span>
-        <span>
-          Tap <ShareIcon /> <span className="font-semibold">Share</span> in Safari's toolbar.
-        </span>
-      </li>
-      <li className="flex items-center gap-3">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold">2</span>
-        <span>
-          Choose <span className="font-semibold">Add to Home Screen</span>.
-        </span>
-      </li>
-    </ol>
-  )
-}
-
-function ShareIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="-mt-1 inline h-4 w-4 text-accent" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <path d="M12 3v12M8 7l4-4 4 4M6 11H5v10h14V11h-1" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 /**
- * Downloads a calendar file with a repeating event at their reflection time.
- * On iPhone, opening it offers to add the event to Calendar.
+ * Turns on the evening reminder at their reflection time, saying why first:
+ * a calendar event on the web, notifications (after the iOS prompt) in the App Store build.
  */
-export function CalendarButton({ time, rhythm, className = '' }: { time: string; rhythm: Rhythm; className?: string }) {
-  const [done, setDone] = useState(false)
-  const add = () => {
-    const ics = reminderIcs(time, rhythm, `${window.location.origin}/`)
-    const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'gleam-reminder.ics'
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-    setDone(true)
+export function ReminderButton({ className = '', variant = 'quiet' }: { className?: string; variant?: 'primary' | 'quiet' }) {
+  const time = useStore((s) => s.settings.reminderTime)
+  const rhythm = useStore((s) => s.settings.rhythm)
+  const reminder = useStore((s) => s.settings.reminder)
+  const updateSettings = useStore((s) => s.updateSettings)
+  const [message, setMessage] = useState<string | null>(null)
+  const turnOn = async () => {
+    const outcome = await enableReminder(time, rhythm)
+    if (outcome !== 'denied') updateSettings({ reminder: outcome === 'scheduled' ? 'notifications' : 'calendar' })
+    setMessage(reminderMessage(outcome, time))
   }
+  const calendar = reminderKind() === 'calendar'
   return (
     <div className={className}>
-      <Button variant="quiet" className="w-full px-4 py-3 text-sm" onClick={add}>
-        Add a daily reminder to my calendar
+      <Button variant={variant} className="w-full px-4 py-3 text-[15px]" onClick={turnOn}>
+        {reminder !== 'off' && !message ? `Update my reminder to ${formatTime(time)}` : `Remind me at ${formatTime(time)}`}
       </Button>
-      <p className="mt-2 text-xs leading-relaxed text-faint">
-        {done ? 'Open the downloaded file and choose Add to Calendar.' : 'A repeating calendar event at your time. Nothing is sent anywhere.'}
+      <p role="status" className="mt-2 text-xs leading-relaxed text-faint">
+        {message ??
+          (calendar
+            ? 'Adds a repeating event to your calendar. Nothing is sent anywhere.'
+            : 'Your phone will ask if Gleam can send notifications. One a night, nothing else.')}
       </p>
     </div>
   )
