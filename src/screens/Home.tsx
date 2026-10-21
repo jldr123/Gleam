@@ -5,6 +5,7 @@ import { useNow } from '../hooks'
 import { needsBackupReminder } from '../lib/backup'
 import { formatLongDate, greeting, isEvening } from '../lib/dates'
 import { whyLineFor } from '../lib/prompts'
+import { reviewYearFor, YEAR_MIN_ENTRIES, yearReview } from '../lib/insights'
 import { resurface } from '../lib/stats'
 import { isReflectionTime, isStandalone } from '../lib/reminder'
 import { isReflectionNight } from '../lib/rhythm'
@@ -35,6 +36,11 @@ export function Home() {
   // One card at a time: installing matters most on iPhone, since Safari can clear a site's data.
   const suggestInstall = !installDismissed && !isStandalone()
   const remindBackup = !suggestInstall && needsBackupReminder(Object.keys(entries).length, backup, now.getTime())
+  const yearSeen = useStore((s) => s.yearSeen)
+  const reviewYear = reviewYearFor(today)
+  // In December, the year in review takes the memory card's place until it's been opened.
+  const yearReady =
+    !suggestInstall && !remindBackup && reviewYear !== null && yearSeen !== reviewYear && yearReview(entries, reviewYear).nights >= YEAR_MIN_ENTRIES
   const memory = resurface(entries, today)
   const evening = isEvening(now)
   const reflectionTime = !done && !restNight && isReflectionTime(now, reminderTime)
@@ -139,7 +145,16 @@ export function Home() {
             </div>
           </Card>
         )}
-        {!remindBackup && !suggestInstall && memory && (
+        {yearReady && (
+          <button onClick={() => go('year')} className="flex items-center justify-between rounded-3xl border border-line bg-surface px-5 py-4 text-left">
+            <div>
+              <div className="text-xs text-faint">Ready for you</div>
+              <div className="mt-1 font-serif text-lg leading-snug">Your {reviewYear} in Gleam</div>
+            </div>
+            <Sparkle className="h-5 w-5 text-accent" />
+          </button>
+        )}
+        {!remindBackup && !suggestInstall && !yearReady && memory && (
           <Card className="text-left">
             <div className="text-xs text-faint">{memory.lead}</div>
             <div className="mt-1.5 font-serif text-lg leading-snug">{memory.gratitude.text}</div>

@@ -90,3 +90,34 @@ describe('lens rotation', () => {
     expect(promptFor(START, {}, 4, 1).lens).not.toBe(promptFor(START, {}, 4, 0).lens)
   })
 })
+
+describe('prompt packs', () => {
+  const packIds = new Set(PROMPTS.filter((p) => p.pack).map((p) => p.id))
+
+  it('never asks a pack question unless that pack is on', () => {
+    for (let i = 0; i < 60; i++) {
+      const date = addDays(START, i)
+      for (const mood of [1, 2, 3, 5] as Mood[]) {
+        for (const p of promptOptions(date, {}, mood)) expect(packIds.has(p.id)).toBe(false)
+      }
+    }
+  })
+
+  it('puts questions from a pack that is on first within their lens', () => {
+    const date = '2026-10-05'
+    const options = promptOptions(date, {}, 4, ['work'])
+    const firstOfLens = new Map<string, (typeof options)[number]>()
+    for (const p of options) if (!firstOfLens.has(p.lens)) firstOfLens.set(p.lens, p)
+    expect(firstOfLens.get('selfCredit')?.pack).toBe('work')
+    expect(options.some((p) => p.pack && p.pack !== 'work')).toBe(false)
+  })
+
+  it('keeps the very low night fixed even with packs on', () => {
+    expect(promptOptions('2026-10-05', {}, 1, ['hardSeasons'])).toEqual([LET_GO])
+  })
+
+  it('lets hard seasons questions come up on low nights', () => {
+    const options = promptOptions('2026-10-05', {}, 2, ['hardSeasons'])
+    expect(options.some((p) => p.pack === 'hardSeasons')).toBe(true)
+  })
+})

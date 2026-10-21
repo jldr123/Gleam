@@ -12,6 +12,7 @@
   --accent: #c8743a;
   --accent-ink: #fff8ef;
   --glow: rgb(232 160 92 / 0.35);
+  --serif: 'Fraunces', ui-serif, Georgia, serif;
   color-scheme: light;
 }
 
@@ -40,7 +41,7 @@
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
   --font-sans: 'Manrope', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-serif: 'Fraunces', ui-serif, Georgia, serif;
+  --font-serif: var(--serif);
 }
 
 html,

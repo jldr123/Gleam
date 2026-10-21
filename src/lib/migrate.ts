@@ -1,7 +1,7 @@
 import { lensOf } from './prompts'
 import { DEFAULT_BACKUP, DEFAULT_SETTINGS, type BackupState, type Entry, type Gratitude, type HelpCheck, type Mood, type Settings } from './types'
 
-export const STORE_VERSION = 4
+export const STORE_VERSION = 5
 
 export interface Persisted {
   entries: Record<string, Entry>
@@ -20,10 +20,14 @@ export interface Persisted {
   installDismissed: boolean
   /** Prototype tools unlocked by tapping the version number seven times. */
   devTools: boolean
+  /** Gleam Plus unlocked. The App Store version will restore this from Apple; it is never in a backup. */
+  plus: boolean
+  /** The year whose review was last opened, so the home card stops showing once seen. */
+  yearSeen: number | null
 }
 
 /** Fields older versions didn't have. */
-type Later = Pick<Persisted, 'onboarded' | 'careShownOn' | 'helpChecks' | 'helpAskedOn' | 'installDismissed' | 'devTools'>
+type Later = Pick<Persisted, 'onboarded' | 'careShownOn' | 'helpChecks' | 'helpAskedOn' | 'installDismissed' | 'devTools' | 'plus' | 'yearSeen'>
 
 /** Version 1 stored gratitudes as plain strings and had no lens, stars or thank-yous. */
 interface EntryV1 {
@@ -83,7 +87,12 @@ export function migrate(persisted: unknown, version: number): Persisted {
   return {
     entries,
     draft: null,
-    settings: { ...DEFAULT_SETTINGS, ...old.settings, rhythm: { ...DEFAULT_SETTINGS.rhythm, ...old.settings?.rhythm } },
+    settings: {
+      ...DEFAULT_SETTINGS,
+      ...old.settings,
+      rhythm: { ...DEFAULT_SETTINGS.rhythm, ...old.settings?.rhythm },
+      packs: Array.isArray(old.settings?.packs) ? old.settings.packs : [],
+    },
     backup: { ...DEFAULT_BACKUP, ...old.backup },
     clockOffsetMs: old.clockOffsetMs ?? 0,
     // People who already reflected before the first-run screens existed skip them.
@@ -93,5 +102,7 @@ export function migrate(persisted: unknown, version: number): Persisted {
     helpAskedOn: old.helpAskedOn ?? null,
     installDismissed: old.installDismissed ?? false,
     devTools: old.devTools ?? false,
+    plus: old.plus ?? false,
+    yearSeen: old.yearSeen ?? null,
   }
 }

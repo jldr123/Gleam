@@ -1,5 +1,5 @@
 import { addDays, daysBetween } from './dates'
-import type { Entry, Lens, Mood } from './types'
+import type { Entry, Lens, Mood, PackId } from './types'
 
 export interface Prompt {
   id: string
@@ -7,6 +7,8 @@ export interface Prompt {
   text: string
   /** Kept so older entries still know their lens, but never asked again. */
   retired?: boolean
+  /** A Gleam Plus prompt pack; only asked while that pack is on. */
+  pack?: PackId
 }
 
 /**
@@ -94,6 +96,42 @@ export const PROMPTS: Prompt[] = [
   { id: 'seeing', lens: 'lookAhead', text: 'Who are you looking forward to seeing soon?' },
   { id: 'season', lens: 'lookAhead', text: 'What are you enjoying about this time of year?' },
   { id: 'morning', lens: 'lookAhead', text: 'What would make tomorrow morning a little easier?' },
+
+  // Gleam Plus prompt packs. Each keeps a lens, so the usual rotation and low-night rules still apply.
+  { id: 'rel-noticed', pack: 'relationships', lens: 'people', text: 'What did someone you love do today that you noticed?' },
+  { id: 'rel-laugh', pack: 'relationships', lens: 'people', text: 'Who made you laugh lately?' },
+  { id: 'rel-unsaid', pack: 'relationships', lens: 'people', text: 'What do you appreciate about someone close to you that you rarely say?' },
+  { id: 'rel-close', pack: 'relationships', lens: 'people', text: 'When did you feel close to someone today?' },
+  { id: 'rel-patient', pack: 'relationships', lens: 'kindness', text: 'Where were you patient with someone today?' },
+  { id: 'rel-tomorrow', pack: 'relationships', lens: 'kindness', text: 'What small thing could you do tomorrow for someone you love?' },
+
+  { id: 'hs-steady', pack: 'hardSeasons', lens: 'hardDay', text: 'What kept you steady today, even a little?' },
+  { id: 'hs-friend', pack: 'hardSeasons', lens: 'hardDay', text: 'What would you say to a friend who had the day you had?' },
+  { id: 'hs-comfort', pack: 'hardSeasons', lens: 'hardDay', text: 'What small comfort could you give yourself tonight?' },
+  { id: 'hs-lean', pack: 'hardSeasons', lens: 'hardDay', text: 'Who could you lean on this week?' },
+  { id: 'hs-enough', pack: 'hardSeasons', lens: 'selfCredit', text: 'What did you manage today that was enough?' },
+  { id: 'hs-before', pack: 'hardSeasons', lens: 'selfCredit', text: 'What hard thing have you come through before?' },
+
+  { id: 'work-win', pack: 'work', lens: 'selfCredit', text: 'What went well at work today, even if it was small?' },
+  { id: 'work-figured', pack: 'work', lens: 'selfCredit', text: 'What did you figure out today?' },
+  { id: 'work-colleague', pack: 'work', lens: 'people', text: 'Which colleague made the day easier?' },
+  { id: 'work-mattered', pack: 'work', lens: 'kindness', text: 'What part of your work mattered to someone today?' },
+  { id: 'work-leave', pack: 'work', lens: 'ordinary', text: 'What helped you leave work at work today?' },
+  { id: 'work-lighter', pack: 'work', lens: 'lookAhead', text: "What one thing would make tomorrow's work lighter?" },
+
+  { id: 'tr-first', pack: 'travel', lens: 'savour', text: 'What did you see today for the first time?' },
+  { id: 'tr-taste', pack: 'travel', lens: 'savour', text: 'What did you eat or drink today that you want to remember?' },
+  { id: 'tr-slow', pack: 'travel', lens: 'savour', text: 'When did you slow down and just take it in?' },
+  { id: 'tr-stranger', pack: 'travel', lens: 'people', text: 'Who was kind to you today, even a stranger?' },
+  { id: 'tr-familiar', pack: 'travel', lens: 'ordinary', text: 'What felt familiar today, far from home?' },
+  { id: 'tr-keep', pack: 'travel', lens: 'lookAhead', text: 'Which moment from this trip do you want to keep?' },
+]
+
+export const PACKS: { id: PackId; label: string; text: string }[] = [
+  { id: 'relationships', label: 'Relationships', text: 'Noticing the people closest to you.' },
+  { id: 'hardSeasons', label: 'Hard seasons', text: 'Gentle questions for a difficult stretch.' },
+  { id: 'work', label: 'Work', text: 'Small wins, good colleagues and leaving work at work.' },
+  { id: 'travel', label: 'Travel', text: 'For trips, holidays and somewhere new.' },
 ]
 
 export const LENS_LABELS: Record<Lens, string> = {
@@ -157,7 +195,7 @@ function hash(s: string): number {
  * skips prompts asked in the last three weeks. Later options rotate through
  * the other allowed lenses so a shuffle feels different.
  */
-export function promptOptions(date: string, entries: Record<string, Entry>, mood: Mood | null): Prompt[] {
+export function promptOptions(date: string, entries: Record<string, Entry>, mood: Mood | null, packs: PackId[] = []): Prompt[] {
   const branch = moodBranch(mood)
   if (branch === 'veryLow') return [LET_GO]
 
@@ -174,9 +212,11 @@ export function promptOptions(date: string, entries: Record<string, Entry>, mood
 
   const recent = new Set(past.filter((e) => daysBetween(e.date, date) <= PROMPT_REPEAT_DAYS).map((e) => e.promptId))
   const perLens = ordered.map((lens) => {
-    const all = PROMPTS.filter((p) => p.lens === lens && !p.retired)
+    const all = PROMPTS.filter((p) => p.lens === lens && !p.retired && (!p.pack || packs.includes(p.pack)))
     const fresh = all.filter((p) => !recent.has(p.id))
-    return (fresh.length ? fresh : all).sort((a, b) => hash(date + a.id) - hash(date + b.id))
+    // Questions from packs the user turned on come first within their lens.
+    const fromPack = (p: Prompt) => (p.pack ? 0 : 1)
+    return (fresh.length ? fresh : all).sort((a, b) => fromPack(a) - fromPack(b) || hash(date + a.id) - hash(date + b.id))
   })
 
   const out: Prompt[] = []
@@ -186,8 +226,8 @@ export function promptOptions(date: string, entries: Record<string, Entry>, mood
   return out
 }
 
-export function promptFor(date: string, entries: Record<string, Entry>, mood: Mood | null, skip = 0): Prompt {
-  const options = promptOptions(date, entries, mood)
+export function promptFor(date: string, entries: Record<string, Entry>, mood: Mood | null, skip = 0, packs: PackId[] = []): Prompt {
+  const options = promptOptions(date, entries, mood, packs)
   return options[skip % options.length]
 }
 

@@ -1,8 +1,11 @@
 import { useRef, useState } from 'react'
 import { CalendarButton, RhythmPicker, TimeInput } from '../components/evening'
-import { Button, Card, Chevron, TopBar } from '../components/ui'
+import { PlusBadge } from '../components/plus'
+import { Button, Card, Chevron, Sparkle, TopBar } from '../components/ui'
 import { SUPPORT_URL } from '../lib/flow'
-import type { Theme } from '../lib/types'
+import { FONTS, PALETTES } from '../lib/plus'
+import { PACKS } from '../lib/prompts'
+import type { PackId, Theme } from '../lib/types'
 import { useStore } from '../store'
 import { useUI } from '../ui'
 
@@ -24,6 +27,7 @@ export function Settings() {
   const devTools = useStore((s) => s.devTools)
   const setDevTools = useStore((s) => s.setDevTools)
   const reset = useStore((s) => s.reset)
+  const plus = useStore((s) => s.plus)
   const [confirmReset, setConfirmReset] = useState(false)
   const taps = useRef(0)
   const showTools = import.meta.env.DEV || devTools
@@ -100,7 +104,21 @@ export function Settings() {
             ))}
           </div>
           <p className="mt-2 text-xs text-faint">Auto switches to the evening palette from 6pm.</p>
+          <Looks />
         </Card>
+
+        <PromptPacks />
+
+        <button onClick={() => go('plus')} className="flex items-center justify-between rounded-3xl border border-line bg-surface px-5 py-4 text-left">
+          <div>
+            <div className="flex items-center gap-2 text-[15px] font-semibold">
+              <Sparkle className="h-4 w-4 text-accent" />
+              Gleam Plus
+            </div>
+            <div className="mt-0.5 text-sm text-muted">{plus ? 'Unlocked. Thank you.' : 'Stats, your year in review, themes and prompt packs.'}</div>
+          </div>
+          <Chevron dir="right" className="h-5 w-5 text-faint" />
+        </button>
 
         <button onClick={() => go('backup')} className="flex items-center justify-between rounded-3xl border border-line bg-surface px-5 py-4 text-left">
           <div>
@@ -139,9 +157,15 @@ function PrototypeTools() {
   const seedDemo = useStore((s) => s.seedDemo)
   const seedHeavyWeek = useStore((s) => s.seedHeavyWeek)
   const setDevTools = useStore((s) => s.setDevTools)
+  const plus = useStore((s) => s.plus)
+  const setPlus = useStore((s) => s.setPlus)
   return (
     <Card>
       <div className="text-xs font-semibold tracking-wide text-faint uppercase">Prototype tools</div>
+      <label className="mt-3 flex items-center justify-between text-sm">
+        <span className="text-muted">Gleam Plus unlocked</span>
+        <input type="checkbox" checked={plus} onChange={(e) => setPlus(e.target.checked)} className="h-5 w-5 accent-[var(--accent)]" />
+      </label>
       <div className="mt-3 flex items-center justify-between text-sm">
         <span className="text-muted">Clock offset: {Math.round(offset / HOUR)}h</span>
         <div className="flex gap-2">
@@ -167,6 +191,89 @@ function PrototypeTools() {
           Hide tools
         </Button>
       </div>
+    </Card>
+  )
+}
+
+/** Plus palettes and heading fonts. Free users see them and are taken to Plus when they tap one. */
+function Looks() {
+  const settings = useStore((s) => s.settings)
+  const updateSettings = useStore((s) => s.updateSettings)
+  const plus = useStore((s) => s.plus)
+  const go = useUI((s) => s.go)
+  const palette = plus ? settings.palette : 'ember'
+  const font = plus ? settings.font : 'fraunces'
+  const choose = (patch: Partial<typeof settings>) => (plus ? updateSettings(patch) : go('plus'))
+  return (
+    <div className="mt-5 border-t border-line pt-4">
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-muted">Palette</div>
+        {!plus && <PlusBadge />}
+      </div>
+      <div className="mt-3 grid grid-cols-5 gap-2">
+        {PALETTES.map((p) => (
+          <button key={p.id} onClick={() => choose({ palette: p.id })} className="flex flex-col items-center gap-1.5" aria-pressed={palette === p.id}>
+            <span
+              className={`relative flex h-11 w-11 items-center justify-center rounded-full border transition ${palette === p.id ? 'border-ink' : 'border-line'}`}
+              style={{ background: `linear-gradient(135deg, ${p.day.bg} 50%, ${p.evening.bg} 50%)` }}
+            >
+              <span className="h-4 w-4 rounded-full" style={{ background: p.day.accent, boxShadow: `0 0 0 2px ${p.evening.accent}` }} />
+            </span>
+            <span className={`text-[11px] ${palette === p.id ? 'font-semibold text-ink' : 'text-muted'}`}>{p.label}</span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-5 text-xs text-muted">Heading font</div>
+      <div className="mt-3 grid grid-cols-3 gap-1 rounded-full bg-surface-2 p-1">
+        {FONTS.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => choose({ font: f.id })}
+            style={{ fontFamily: f.stack }}
+            className={`rounded-full py-2 text-[15px] transition ${font === f.id ? 'bg-surface font-semibold text-ink shadow-sm' : 'text-muted'}`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function PromptPacks() {
+  const packs = useStore((s) => s.settings.packs)
+  const updateSettings = useStore((s) => s.updateSettings)
+  const plus = useStore((s) => s.plus)
+  const go = useUI((s) => s.go)
+  const toggle = (id: PackId) => {
+    if (!plus) return go('plus')
+    updateSettings({ packs: packs.includes(id) ? packs.filter((p) => p !== id) : [...packs, id] })
+  }
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-muted">Prompt packs</div>
+        {!plus && <PlusBadge />}
+      </div>
+      <ul className="mt-1 flex flex-col divide-y divide-line">
+        {PACKS.map((p) => (
+          <li key={p.id}>
+            <label className="flex items-center justify-between gap-4 py-3">
+              <span>
+                <span className="block text-[15px]">{p.label}</span>
+                <span className="block text-xs text-faint">{p.text}</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={plus && packs.includes(p.id)}
+                onChange={() => toggle(p.id)}
+                className="h-5 w-5 shrink-0 accent-[var(--accent)]"
+              />
+            </label>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1 text-xs leading-relaxed text-faint">Questions from the packs you turn on come up first, mixed in with the usual ones.</p>
     </Card>
   )
 }

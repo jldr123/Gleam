@@ -50,7 +50,7 @@ describe('migrate from version 1', () => {
   })
 
   it('keeps settings and drops the old draft', () => {
-    expect(out.settings).toEqual({ name: 'Joe', theme: 'dark', rhythm: { mode: 'nightly', nights: [0, 3] }, reminderTime: '21:30', light: false })
+    expect(out.settings).toEqual({ name: 'Joe', theme: 'dark', rhythm: { mode: 'nightly', nights: [0, 3] }, reminderTime: '21:30', light: false, palette: 'ember', font: 'fraunces', packs: [] })
     expect(out.draft).toBeNull()
   })
 
@@ -104,7 +104,7 @@ describe('migrate from version 3', () => {
 
   it('keeps entries, settings and backup state', () => {
     expect(out.entries['2026-10-19']).toEqual(v3.entries['2026-10-19'])
-    expect(out.settings).toEqual({ name: 'Joe', theme: 'auto', rhythm: { mode: 'some', nights: [1] }, reminderTime: '21:30', light: false })
+    expect(out.settings).toEqual({ name: 'Joe', theme: 'auto', rhythm: { mode: 'some', nights: [1] }, reminderTime: '21:30', light: false, palette: 'ember', font: 'fraunces', packs: [] })
     expect(out.backup.lastExportAt).toBe(5)
   })
 
@@ -114,5 +114,20 @@ describe('migrate from version 3', () => {
 
   it('keeps a stored reflection time', () => {
     expect(migrate({ entries: {}, settings: { reminderTime: '22:15' }, onboarded: true }, 4).settings.reminderTime).toBe('22:15')
+  })
+})
+
+describe('migrate from version 4', () => {
+  const out = migrate({ entries: { '2026-10-19': entry('2026-10-19') }, settings: { name: 'Joe' }, onboarded: true }, 4)
+
+  it('starts without Plus, with the free look and no packs', () => {
+    expect(out.plus).toBe(false)
+    expect(out.yearSeen).toBeNull()
+    expect(out.settings).toMatchObject({ name: 'Joe', palette: 'ember', font: 'fraunces', packs: [] })
+  })
+
+  it('keeps Plus choices already stored', () => {
+    const v5 = migrate({ entries: {}, settings: { palette: 'dusk', packs: ['work'] }, plus: true, yearSeen: 2026 }, 5)
+    expect(v5).toMatchObject({ plus: true, yearSeen: 2026, settings: { palette: 'dusk', packs: ['work'] } })
   })
 })

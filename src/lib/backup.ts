@@ -99,7 +99,7 @@ export function applyImport(existing: Record<string, Entry>, incoming: Record<st
 }
 
 /** The settings a backup can bring back. */
-const RESTORABLE = ['name', 'theme', 'rhythm', 'reminderTime', 'light'] as const
+const RESTORABLE = ['name', 'theme', 'rhythm', 'reminderTime', 'light', 'palette', 'font', 'packs'] as const
 
 /** True when this phone's settings were never changed, so a restore can bring the backup's in without asking. */
 export function hasDefaultSettings(settings: Settings): boolean {

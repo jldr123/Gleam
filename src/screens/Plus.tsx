@@ -1,0 +1,63 @@
+import { motion } from 'framer-motion'
+import { Button, Card, Sparkle, TopBar } from '../components/ui'
+import { PLUS_FEATURES, PLUS_PRICE } from '../lib/plus'
+import { useStore } from '../store'
+import { useUI } from '../ui'
+
+export function Plus() {
+  const plus = useStore((s) => s.plus)
+  const setPlus = useStore((s) => s.setPlus)
+  const go = useUI((s) => s.go)
+  const prev = useUI((s) => s.prev)
+  const back = () => go(prev === 'plus' ? 'settings' : prev)
+
+  return (
+    <div className="glow flex min-h-full flex-col">
+      <TopBar onBack={back} title="Gleam Plus" />
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="safe-bottom flex flex-col gap-4 px-5 pt-4">
+        <div className="px-2 text-center">
+          <Sparkle className="mx-auto h-9 w-9 text-accent" />
+          <h1 className="mt-4 font-serif text-[30px] leading-tight font-light">{plus ? 'Thank you for supporting Gleam' : 'A little more to notice'}</h1>
+          <p className="mx-auto mt-3 max-w-[19rem] text-[15px] leading-relaxed text-muted">
+            {plus
+              ? 'Everything below is unlocked. Your nightly reflection always stays free.'
+              : 'Your nightly reflection is free, always. Plus adds a few extras for anyone who wants to look a little deeper.'}
+          </p>
+        </div>
+
+        <Card>
+          <ul className="flex flex-col gap-4">
+            {PLUS_FEATURES.map((f) => (
+              <li key={f.title} className="flex gap-3">
+                <Sparkle className="mt-1 h-4 w-4 shrink-0 text-accent" />
+                <div>
+                  <div className="text-[15px] font-semibold">{f.title}</div>
+                  <div className="mt-0.5 text-sm leading-relaxed text-muted">{f.text}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+
+        {plus ? (
+          <div className="flex flex-col gap-2">
+            <Button onClick={() => go('stats')}>See your stats</Button>
+            <Button variant="quiet" onClick={() => go('year')}>
+              Your year in Gleam
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2 text-center">
+            <Button className="w-full" onClick={() => setPlus(true)}>
+              Unlock for {PLUS_PRICE}
+            </Button>
+            <div className="text-xs text-faint">One payment, yours to keep. No subscription.</div>
+            <p className="mt-3 max-w-[19rem] text-xs leading-relaxed text-faint">
+              In this prototype, unlocking is free so you can try it. The App Store version will take payment through Apple.
+            </p>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  )
+}

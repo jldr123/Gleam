@@ -77,6 +77,14 @@ export type Draft = Omit<Entry, 'starred' | 'createdAt' | 'updatedAt'> & {
 
 export type Theme = 'auto' | 'light' | 'dark'
 
+/** Gleam Plus colour palettes. Ember is the free default. */
+export type Palette = 'ember' | 'candlelight' | 'dusk' | 'paper' | 'sage'
+
+/** Gleam Plus heading fonts. Fraunces is the free default. */
+export type HeadingFont = 'fraunces' | 'classic' | 'modern'
+
+export type PackId = 'relationships' | 'hardSeasons' | 'work' | 'travel'
+
 /** Every night, or only on chosen weekdays (0 is Sunday). */
 export interface Rhythm {
   mode: 'nightly' | 'some'
@@ -91,6 +99,11 @@ export interface Settings {
   reminderTime: string
   /** Lighter nights: one gratitude instead of up to three. */
   light: boolean
+  /** Plus: only applied while Plus is unlocked, so it is kept if Plus lapses and returns. */
+  palette: Palette
+  font: HeadingFont
+  /** Plus: prompt packs mixed into the nightly rotation. */
+  packs: PackId[]
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -99,6 +112,9 @@ export const DEFAULT_SETTINGS: Settings = {
   rhythm: { mode: 'nightly', nights: [0, 3] },
   reminderTime: '21:30',
   light: false,
+  palette: 'ember',
+  font: 'fraunces',
+  packs: [],
 }
 
 export type HelpAnswer = 'yes' | 'sortOf' | 'notReally'

@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Card, Star, TopBar } from '../components/ui'
+import { PlusBadge } from '../components/plus'
+import { Card, Chevron, Star, TopBar } from '../components/ui'
 import { formatLongDate, formatMonth, weekdayLetter } from '../lib/dates'
 import { finishedMonths, monthKey, type MonthSummary } from '../lib/months'
 import { moodWeek, thanksSent, topThemes, totalGratitudes } from '../lib/stats'
@@ -41,6 +42,10 @@ export function Bank() {
       <TopBar onBack={back} title="Gratitude bank" />
       <div className="safe-bottom flex flex-col gap-4 px-5 pt-2">
         <Summary entries={entries} list={list} today={today} />
+        <div className="grid grid-cols-2 gap-2">
+          <MoreLink title="All your stats" onClick={() => go('stats')} />
+          <MoreLink title="Your year in Gleam" onClick={() => go('year')} />
+        </div>
         {months.map(([month, items]) => (
           <section key={month} className="mt-2">
             <h3 className="mb-2 px-1 text-xs font-semibold tracking-wide text-faint uppercase">{formatMonth(`${month}-01`)}</h3>
@@ -109,6 +114,19 @@ function Summary({ entries, list, today }: { entries: Record<string, Entry>; lis
         </div>
       )}
     </Card>
+  )
+}
+
+function MoreLink({ title, onClick }: { title: string; onClick: () => void }) {
+  const plus = useStore((s) => s.plus)
+  return (
+    <button onClick={onClick} className="flex min-h-[4.5rem] flex-col justify-between rounded-3xl border border-line bg-surface px-4 py-3 text-left">
+      <span className="flex w-full items-start justify-between gap-2">
+        <span className="text-[15px] leading-snug font-semibold">{title}</span>
+        <Chevron dir="right" className="mt-0.5 h-4 w-4 shrink-0 text-faint" />
+      </span>
+      {!plus && <PlusBadge className="mt-2 self-start" />}
+    </button>
   )
 }
 
