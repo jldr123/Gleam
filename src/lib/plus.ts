@@ -1,13 +1,13 @@
-import type { HeadingFont, Palette, Settings } from './types'
+import type { HeadingFont, PackId, Palette, Settings } from './types'
 
-/** One payment, kept for good. The App Store version takes it through Apple. */
-export const PLUS_PRICE = 'US$4.99'
+/** Prompt packs anyone can turn on. Gentler questions for a hard stretch are never behind a payment. */
+export const FREE_PACKS: PackId[] = ['hardSeasons']
 
 export const PLUS_FEATURES = [
   { title: 'Your stats', text: 'Moods by weekday, the people and things that keep coming up, and your longest streak.' },
   { title: 'Your year in Gleam', text: 'A warm look back at your year, ready each December, to keep or share.' },
   { title: 'Themes', text: 'Four more palettes and two heading fonts for your evenings.' },
-  { title: 'Prompt packs', text: 'Questions for relationships, hard seasons, work and travel.' },
+  { title: 'Prompt packs', text: 'Questions for relationships, work and travel.' },
 ]
 
 type Tokens = Record<'bg' | 'surface' | 'surface-2' | 'line' | 'text' | 'muted' | 'faint' | 'accent' | 'accent-ink' | 'glow', string>
@@ -93,7 +93,17 @@ export function paletteDef(id: Palette): PaletteDef {
   return PALETTES.find((p) => p.id === id) ?? PALETTES[0]
 }
 
-/** The look actually shown: Plus choices only apply while Plus is unlocked. */
-export function activeLook(settings: Settings, plus: boolean): { palette: Palette; font: HeadingFont } {
-  return plus ? { palette: settings.palette, font: settings.font } : { palette: 'ember', font: 'fraunces' }
+/** The look actually shown: Plus choices only apply while Plus is unlocked, and a free preview shows over either. */
+export function activeLook(
+  settings: Settings,
+  plus: boolean,
+  preview: { palette?: Palette; font?: HeadingFont } | null = null,
+): { palette: Palette; font: HeadingFont } {
+  const base = plus ? { palette: settings.palette, font: settings.font } : { palette: 'ember' as Palette, font: 'fraunces' as HeadingFont }
+  return { ...base, ...preview }
+}
+
+/** The packs that count tonight: all chosen ones with Plus, only the free ones without. */
+export function activePacks(settings: Settings, plus: boolean): PackId[] {
+  return plus ? settings.packs : settings.packs.filter((p) => FREE_PACKS.includes(p))
 }

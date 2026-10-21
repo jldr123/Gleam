@@ -1,7 +1,8 @@
-import { daysBetween, parseISODate, weekday } from './dates'
+import { addDays, daysBetween, parseISODate, weekday } from './dates'
 import { countPeople, monthKey, topOf, topThings } from './months'
 import { LENS_LABELS } from './prompts'
-import { computeStreak } from './streak'
+import { isReflectionNight } from './rhythm'
+import { REST_WINDOW_DAYS } from './streak'
 import { thanksSent, totalGratitudes, type Theme } from './stats'
 import type { Entry, Gratitude, Lens, Rhythm } from './types'
 
@@ -25,13 +26,28 @@ export function inRange(entries: Record<string, Entry>, today: string, range: Ra
 /**
  * The longest streak ever, by the same rules as the current one (rest
  * nights pass, one missed night a week is forgiven), so the two always agree.
+ * One pass over the days: a missed night within a week of the previous miss
+ * ends the run, and the new run starts just after that previous miss.
  */
 export function longestRun(entries: Record<string, Entry>, today: string, rhythm: Rhythm): number {
-  const dates = Object.keys(entries).sort()
+  const dates = Object.keys(entries)
   if (dates.length === 0) return 0
+  const earliest = dates.reduce((a, b) => (a < b ? a : b))
   let best = 0
-  // A streak can only end on a night with an entry, so those are the only ends worth checking.
-  for (const day of dates) if (day <= today) best = Math.max(best, computeStreak(entries, day, rhythm).nights)
+  let run = 0
+  let lastMiss: string | null = null
+  let sinceLastMiss = 0
+  for (let day = earliest; day <= today; day = addDays(day, 1)) {
+    if (entries[day]) {
+      run++
+      sinceLastMiss++
+      if (run > best) best = run
+    } else if (isReflectionNight(day, rhythm) && day !== today) {
+      if (lastMiss !== null && daysBetween(lastMiss, day) < REST_WINDOW_DAYS) run = sinceLastMiss
+      lastMiss = day
+      sinceLastMiss = 0
+    }
+  }
   return best
 }
 

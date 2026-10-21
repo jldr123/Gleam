@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { DEFAULT_PRODUCT, getProduct, restorePlus, type PlusProduct } from '../lib/purchase'
 import { useStore } from '../store'
 import { useUI } from '../ui'
 import { Button, Sparkle } from './ui'
@@ -36,6 +37,49 @@ export function PlusGate({ children, title, text }: { children: ReactNode; title
           </Button>
         </div>
       </div>
+    </div>
+  )
+}
+
+/** The store's price and terms, starting from the default until the store answers. */
+export function usePlusProduct(): PlusProduct {
+  const [product, setProduct] = useState(DEFAULT_PRODUCT)
+  useEffect(() => {
+    let live = true
+    getProduct().then((p) => live && setProduct(p)).catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [])
+  return product
+}
+
+/** "Restore purchase", for a new phone or a reinstall. Says what happened in place. */
+export function RestoreButton({ className = '' }: { className?: string }) {
+  const setPlus = useStore((s) => s.setPlus)
+  const [message, setMessage] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const restore = async () => {
+    setBusy(true)
+    try {
+      const result = await restorePlus()
+      if (result.restored) setPlus(true)
+      setMessage(result.message)
+    } catch {
+      setMessage("Couldn't reach the App Store. Try again in a moment.")
+    }
+    setBusy(false)
+  }
+  return (
+    <div className={`text-center ${className}`}>
+      <button onClick={restore} disabled={busy} className="px-3 py-2 text-sm text-muted underline-offset-4 active:text-ink disabled:opacity-50">
+        Restore purchase
+      </button>
+      {message && (
+        <p role="status" className="text-xs text-faint">
+          {message}
+        </p>
+      )}
     </div>
   )
 }

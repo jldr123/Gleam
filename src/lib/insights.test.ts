@@ -1,7 +1,8 @@
 import { entry } from '../test/fixtures'
 import { addDays } from './dates'
 import { brightestWeekday, insights, inRange, longestRun, moodByWeekday, reviewYearFor, yearReview } from './insights'
-import type { Entry, Mood } from './types'
+import { computeStreak } from './streak'
+import type { Entry, Mood, Rhythm } from './types'
 
 const byDate = (list: Entry[]) => Object.fromEntries(list.map((e) => [e.date, e]))
 
@@ -28,6 +29,37 @@ describe('longestRun', () => {
     const some = { mode: 'some' as const, nights: [1, 3] }
     expect(longestRun(byDate(['2026-10-05', '2026-10-07', '2026-10-12'].map((d) => entry(d))), '2026-10-13', some)).toBe(3)
   })
+  /** The first version: the streak walk from every entry date. Slow, but plainly right. */
+  const reference = (entries: Record<string, Entry>, today: string, rhythm: Rhythm) =>
+    Object.keys(entries)
+      .filter((d) => d <= today)
+      .reduce((best, d) => Math.max(best, computeStreak(entries, d, rhythm).nights), 0)
+
+  it('matches the streak walk from every night, on varied data', () => {
+    let seed = 7
+    const rand = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31)
+    const rhythms: Rhythm[] = [nightly, { mode: 'some', nights: [1, 3] }, { mode: 'some', nights: [0, 2, 4, 6] }, { mode: 'some', nights: [5] }]
+    for (let trial = 0; trial < 60; trial++) {
+      const rhythm = rhythms[trial % rhythms.length]
+      const keep = 0.5 + rand() * 0.5
+      const list: Entry[] = []
+      for (let i = 0; i < 120; i++) if (rand() < keep) list.push(entry(addDays('2026-01-01', i)))
+      const today = addDays('2026-01-01', 110 + Math.floor(rand() * 20))
+      const entries = byDate(list)
+      expect(longestRun(entries, today, rhythm)).toBe(reference(entries, today, rhythm))
+    }
+  })
+
+  it('handles three years of entries quickly', () => {
+    const list: Entry[] = []
+    for (let i = 0; i < 3 * 365; i++) if (i % 11 !== 0) list.push(entry(addDays('2024-01-01', i)))
+    const entries = byDate(list)
+    const started = performance.now()
+    const best = longestRun(entries, '2026-12-31', nightly)
+    expect(performance.now() - started).toBeLessThan(100)
+    expect(best).toBeGreaterThan(30)
+  })
+
   it("doesn't count tonight as missed", () => {
     expect(longestRun(byDate([entry('2026-10-20')]), '2026-10-21', nightly)).toBe(1)
   })

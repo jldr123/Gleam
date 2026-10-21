@@ -66,10 +66,3 @@ export function reminderIcs(time: string, rhythm: Rhythm, url: string, now = new
     '',
   ].join('\r\n')
 }
-
-/** True when Gleam runs from the home screen rather than a browser tab. */
-export function isStandalone(): boolean {
-  if (typeof window === 'undefined') return false
-  const nav = navigator as Navigator & { standalone?: boolean }
-  return !!nav.standalone || !!window.matchMedia?.('(display-mode: standalone)').matches
-}

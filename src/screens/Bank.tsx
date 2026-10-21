@@ -18,9 +18,10 @@ export function Bank() {
   const setOpenEntry = useUI((s) => s.setOpenEntry)
 
   const list = Object.values(entries).sort((a, b) => b.date.localeCompare(a.date))
+  const goBack = useUI((s) => s.back)
   const back = () => {
     setOpenEntry(null)
-    go('home')
+    goBack()
   }
 
   if (list.length === 0) {

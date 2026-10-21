@@ -50,7 +50,7 @@ describe('migrate from version 1', () => {
   })
 
   it('keeps settings and drops the old draft', () => {
-    expect(out.settings).toEqual({ name: 'Joe', theme: 'dark', rhythm: { mode: 'nightly', nights: [0, 3] }, reminderTime: '21:30', light: false, palette: 'ember', font: 'fraunces', packs: [] })
+    expect(out.settings).toEqual({ name: 'Joe', theme: 'dark', rhythm: { mode: 'nightly', nights: [0, 3] }, reminderTime: '21:30', reminder: 'off', light: false, palette: 'ember', font: 'fraunces', packs: [] })
     expect(out.draft).toBeNull()
   })
 
@@ -104,12 +104,12 @@ describe('migrate from version 3', () => {
 
   it('keeps entries, settings and backup state', () => {
     expect(out.entries['2026-10-19']).toEqual(v3.entries['2026-10-19'])
-    expect(out.settings).toEqual({ name: 'Joe', theme: 'auto', rhythm: { mode: 'some', nights: [1] }, reminderTime: '21:30', light: false, palette: 'ember', font: 'fraunces', packs: [] })
+    expect(out.settings).toEqual({ name: 'Joe', theme: 'auto', rhythm: { mode: 'some', nights: [1] }, reminderTime: '21:30', reminder: 'off', light: false, palette: 'ember', font: 'fraunces', packs: [] })
     expect(out.backup.lastExportAt).toBe(5)
   })
 
   it('adds the new local-only state', () => {
-    expect(out).toMatchObject({ onboarded: true, careShownOn: null, helpChecks: [], helpAskedOn: null, installDismissed: false, devTools: false })
+    expect(out).toMatchObject({ onboarded: true, careShownOn: null, helpChecks: [], helpAskedOn: null, devTools: false })
   })
 
   it('keeps a stored reflection time', () => {
@@ -129,5 +129,31 @@ describe('migrate from version 4', () => {
   it('keeps Plus choices already stored', () => {
     const v5 = migrate({ entries: {}, settings: { palette: 'dusk', packs: ['work'] }, plus: true, yearSeen: 2026 }, 5)
     expect(v5).toMatchObject({ plus: true, yearSeen: 2026, settings: { palette: 'dusk', packs: ['work'] } })
+  })
+})
+
+describe('migrate from version 5', () => {
+  const v5 = {
+    entries: { '2026-10-19': entry('2026-10-19') },
+    settings: { name: 'Joe', reminderTime: '22:00', palette: 'dusk', packs: ['hardSeasons'] },
+    installDismissed: true,
+    plus: true,
+    yearSeen: null,
+    onboarded: true,
+  }
+  const out = migrate(v5, 5)
+
+  it('keeps everything and starts with no reminder set', () => {
+    expect(out.entries['2026-10-19']).toEqual(v5.entries['2026-10-19'])
+    expect(out.settings).toMatchObject({ name: 'Joe', reminderTime: '22:00', reminder: 'off', palette: 'dusk', packs: ['hardSeasons'] })
+    expect(out.plus).toBe(true)
+  })
+
+  it('drops the old Home Screen card state', () => {
+    expect(out).not.toHaveProperty('installDismissed')
+  })
+
+  it('keeps a reminder that was already set', () => {
+    expect(migrate({ entries: {}, settings: { reminder: 'calendar' } }, 6).settings.reminder).toBe('calendar')
   })
 })

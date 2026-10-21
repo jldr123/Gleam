@@ -9,12 +9,12 @@ import { useUI } from '../ui'
 export function Year() {
   const entries = useStore((s) => s.entries)
   const today = useStore((s) => s.today())
-  const go = useUI((s) => s.go)
-  const prev = useUI((s) => s.prev)
+  const back = useUI((s) => s.back)
   const years = yearsWithEntries(entries)
   const fallback = reviewYearFor(today) ?? Number(today.slice(0, 4))
   const [year, setYear] = useState(years.includes(fallback) ? fallback : (years[0] ?? fallback))
   const review = yearReview(entries, year)
+  const plus = useStore((s) => s.plus)
   const markYearSeen = useStore((s) => s.markYearSeen)
   const season = reviewYearFor(today)
   useEffect(() => {
@@ -23,7 +23,7 @@ export function Year() {
 
   return (
     <div className="glow flex min-h-full flex-col">
-      <TopBar onBack={() => go(prev === 'year' || prev === 'plus' ? 'bank' : prev)} title="Your year in Gleam" />
+      <TopBar onBack={back} title="Your year in Gleam" />
       <div className="safe-bottom flex flex-col gap-4 px-5 pt-2">
         {years.length > 1 && (
           <div className="flex justify-center gap-1 rounded-full bg-surface-2 p-1">
@@ -53,17 +53,59 @@ export function Year() {
           <p className="px-4 pb-6 text-center text-[15px] leading-relaxed text-muted">
             Your year fills in as you reflect. After {YEAR_MIN_ENTRIES} evenings there will be enough here to look back on.
           </p>
-        ) : (
-          <PlusGate title="Your year, gathered up" text="Plus brings together the people, moments and months that made your year, ready to keep or share.">
+        ) : plus ? (
+          <>
+            <Taster review={review} />
             <Details review={review} />
-          </PlusGate>
+          </>
+        ) : (
+          <>
+            {/* A free taster: the people and one gratitude to reread. The rest is part of Plus. */}
+            <Taster review={review} />
+            <PlusGate title="There's more to your year" text="Plus gathers the things, months and moments that made your year, ready to keep or share.">
+              <Details review={review} />
+            </PlusGate>
+          </>
         )}
       </div>
     </div>
   )
 }
 
+/** The people who kept coming up and the first gratitude to reread. Free for everyone. */
+function Taster({ review }: { review: YearReview }) {
+  const first = review.favourites[0]
+  return (
+    <>
+      {review.people.length > 0 && (
+        <Card>
+          <div className="text-xs text-faint">The people who kept coming up</div>
+          <div className="mt-1.5 font-serif text-[22px] leading-snug">{listOf(review.people.map((p) => p.name))}</div>
+        </Card>
+      )}
+      {first && (
+        <Card>
+          <div className="text-xs text-faint">One you might like to reread</div>
+          <Favourite favourite={first} />
+        </Card>
+      )}
+    </>
+  )
+}
+
+function Favourite({ favourite: f }: { favourite: YearReview['favourites'][number] }) {
+  return (
+    <div className="mt-2">
+      <div className="font-serif text-[18px] leading-snug">{f.gratitude.text}</div>
+      {f.gratitude.because && <div className="mt-0.5 text-sm text-muted italic">because {f.gratitude.because}</div>}
+      <div className="mt-1 text-xs text-faint">{formatLongDate(f.date)}</div>
+    </div>
+  )
+}
+
+/** Everything after the taster: things, months, more favourites, kept moments and sharing. */
 function Details({ review }: { review: YearReview }) {
+  const more = review.favourites.slice(1)
   const [sharing, setSharing] = useState<'idle' | 'busy' | 'saved' | 'failed'>('idle')
   const monthName = (m: string) => formatMonth(`${m}-01`).split(' ')[0]
 
@@ -79,13 +121,6 @@ function Details({ review }: { review: YearReview }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {review.people.length > 0 && (
-        <Card>
-          <div className="text-xs text-faint">The people who kept coming up</div>
-          <div className="mt-1.5 font-serif text-[22px] leading-snug">{listOf(review.people.map((p) => p.name))}</div>
-        </Card>
-      )}
-
       {review.things.length > 0 && (
         <Card>
           <div className="text-xs text-faint">And the things</div>
@@ -118,15 +153,13 @@ function Details({ review }: { review: YearReview }) {
         </Card>
       )}
 
-      {review.favourites.length > 0 && (
+      {more.length > 0 && (
         <Card>
-          <div className="text-xs text-faint">A few you might like to reread</div>
-          <ul className="mt-2 flex flex-col gap-4">
-            {review.favourites.map((f) => (
+          <div className="text-xs text-faint">A few more to reread</div>
+          <ul className="flex flex-col gap-2">
+            {more.map((f) => (
               <li key={f.date + f.gratitude.text}>
-                <div className="font-serif text-[18px] leading-snug">{f.gratitude.text}</div>
-                {f.gratitude.because && <div className="mt-0.5 text-sm text-muted italic">because {f.gratitude.because}</div>}
-                <div className="mt-1 text-xs text-faint">{formatLongDate(f.date)}</div>
+                <Favourite favourite={f} />
               </li>
             ))}
           </ul>

@@ -10,6 +10,26 @@ const STOPWORDS = new Set(
   time grateful thankful lot little bit good great nice felt feel feeling being able long`.split(/\s+/),
 )
 
+/**
+ * Common verbs and filler that read oddly as "things that kept coming up"
+ * ("call", "clean", "finishing"). Words that are often verbs ("book", "call")
+ * go too, since a single word loses the sense.
+ */
+const NOT_THINGS = new Set(
+  `call calls called calling clean cleaned cleaning book booked booking finish finished finishing start started starting
+  went go going goes come came coming take took taking taken give gave giving given see saw seeing seen say said saying
+  tell told telling ask asked asking help helped helping try tried trying keep kept keeping let put run ran sit sat stay
+  stayed think thought know knew want wanted need needed use used find found look looked looking watch watched leave left
+  bring brought buy bought pick picked send sent texted reply chatted talk talked talking laugh laughed laughing
+  cook cooked cooking eat ate eating drank slept rested worked working walked hugged
+  quiet early late old new first last next whole every each much many few lots someone something anything everything
+  nothing around back again even ever never always almost actually finally maybe instead without hour hours minutes
+  week weeks today's tonight yesterday tomorrow`.split(/\s+/),
+)
+
+/** A theme needs to come up on this many evenings before it's worth showing. */
+export const THEME_MIN_EVENINGS = 3
+
 export interface Theme {
   word: string
   count: number
@@ -24,14 +44,14 @@ export function topThemes(entries: Entry[], limit = 5): Theme[] {
     for (const g of e.gratitudes) {
       for (const raw of g.text.toLowerCase().match(/[a-z][a-z']+/g) ?? []) {
         const word = raw.replace(/'s$/, '')
-        if (word.length < 3 || STOPWORDS.has(word)) continue
+        if (word.length < 3 || STOPWORDS.has(word) || NOT_THINGS.has(word)) continue
         seen.add(word)
       }
     }
     for (const w of seen) counts.set(w, (counts.get(w) ?? 0) + 1)
   }
   return [...counts.entries()]
-    .filter(([, c]) => c >= 2)
+    .filter(([, c]) => c >= THEME_MIN_EVENINGS)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, limit)
     .map(([word, count]) => ({ word, count }))

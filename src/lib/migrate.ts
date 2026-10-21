@@ -1,7 +1,7 @@
 import { lensOf } from './prompts'
 import { DEFAULT_BACKUP, DEFAULT_SETTINGS, type BackupState, type Entry, type Gratitude, type HelpCheck, type Mood, type Settings } from './types'
 
-export const STORE_VERSION = 5
+export const STORE_VERSION = 6
 
 export interface Persisted {
   entries: Record<string, Entry>
@@ -17,7 +17,6 @@ export interface Persisted {
   helpChecks: HelpCheck[]
   /** The night that check was last asked. */
   helpAskedOn: string | null
-  installDismissed: boolean
   /** Prototype tools unlocked by tapping the version number seven times. */
   devTools: boolean
   /** Gleam Plus unlocked. The App Store version will restore this from Apple; it is never in a backup. */
@@ -27,7 +26,7 @@ export interface Persisted {
 }
 
 /** Fields older versions didn't have. */
-type Later = Pick<Persisted, 'onboarded' | 'careShownOn' | 'helpChecks' | 'helpAskedOn' | 'installDismissed' | 'devTools' | 'plus' | 'yearSeen'>
+type Later = Pick<Persisted, 'onboarded' | 'careShownOn' | 'helpChecks' | 'helpAskedOn' | 'devTools' | 'plus' | 'yearSeen'>
 
 /** Version 1 stored gratitudes as plain strings and had no lens, stars or thank-yous. */
 interface EntryV1 {
@@ -100,7 +99,6 @@ export function migrate(persisted: unknown, version: number): Persisted {
     careShownOn: old.careShownOn ?? null,
     helpChecks: Array.isArray(old.helpChecks) ? old.helpChecks : [],
     helpAskedOn: old.helpAskedOn ?? null,
-    installDismissed: old.installDismissed ?? false,
     devTools: old.devTools ?? false,
     plus: old.plus ?? false,
     yearSeen: old.yearSeen ?? null,

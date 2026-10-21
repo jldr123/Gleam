@@ -95,8 +95,10 @@ export interface Settings {
   name: string
   theme: Theme
   rhythm: Rhythm
-  /** The evening reflection time, HH:MM in 24 hours. Kept for native reminders later. */
+  /** The evening reflection time, HH:MM in 24 hours. */
   reminderTime: string
+  /** How the evening reminder was set up, if it was: a calendar event on the web, notifications in the App Store build. */
+  reminder: 'off' | 'calendar' | 'notifications'
   /** Lighter nights: one gratitude instead of up to three. */
   light: boolean
   /** Plus: only applied while Plus is unlocked, so it is kept if Plus lapses and returns. */
@@ -111,6 +113,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'auto',
   rhythm: { mode: 'nightly', nights: [0, 3] },
   reminderTime: '21:30',
+  reminder: 'off',
   light: false,
   palette: 'ember',
   font: 'fraunces',

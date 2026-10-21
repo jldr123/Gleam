@@ -1,11 +1,11 @@
-import { useRef, useState } from 'react'
-import { CalendarButton, RhythmPicker, TimeInput } from '../components/evening'
-import { PlusBadge } from '../components/plus'
+import { useEffect, useRef, useState } from 'react'
+import { ReminderButton, RhythmPicker, TimeInput } from '../components/evening'
+import { PlusBadge, RestoreButton } from '../components/plus'
 import { Button, Card, Chevron, Sparkle, TopBar } from '../components/ui'
 import { SUPPORT_URL } from '../lib/flow'
-import { FONTS, PALETTES } from '../lib/plus'
+import { FONTS, FREE_PACKS, PALETTES, paletteDef } from '../lib/plus'
 import { PACKS } from '../lib/prompts'
-import type { PackId, Theme } from '../lib/types'
+import type { HeadingFont, PackId, Palette, Theme } from '../lib/types'
 import { useStore } from '../store'
 import { useUI } from '../ui'
 
@@ -21,6 +21,7 @@ const UNLOCK_TAPS = 7
 
 export function Settings() {
   const go = useUI((s) => s.go)
+  const back = useUI((s) => s.back)
   const settings = useStore((s) => s.settings)
   const rhythm = settings.rhythm
   const updateSettings = useStore((s) => s.updateSettings)
@@ -31,6 +32,9 @@ export function Settings() {
   const [confirmReset, setConfirmReset] = useState(false)
   const taps = useRef(0)
   const showTools = import.meta.env.DEV || devTools
+  const setPreview = useUI((s) => s.setPreview)
+  // A free preview of a palette or font only lasts while Settings is open.
+  useEffect(() => () => setPreview(null), [setPreview])
 
   const tapVersion = () => {
     taps.current += 1
@@ -42,7 +46,7 @@ export function Settings() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <TopBar onBack={() => go('home')} title="Settings" />
+      <TopBar onBack={back} title="Settings" />
       <div className="safe-bottom flex flex-col gap-4 px-5 pt-2">
         <Card>
           <label className="text-xs text-muted" htmlFor="name">
@@ -64,8 +68,8 @@ export function Settings() {
             </label>
             <TimeInput id="time" value={settings.reminderTime} onChange={(reminderTime) => updateSettings({ reminderTime })} />
           </div>
-          <p className="mt-2 text-xs leading-relaxed text-faint">From half an hour before, Gleam's home screen gently lets you know it's time.</p>
-          <CalendarButton time={settings.reminderTime} rhythm={rhythm} className="mt-4" />
+          <p className="mt-2 text-xs leading-relaxed text-faint">From half an hour before, Gleam's home screen gently lets you know it's time. A reminder keeps the habit going.</p>
+          <ReminderButton className="mt-4" />
         </Card>
 
         <Card>
@@ -81,12 +85,7 @@ export function Settings() {
               <span className="block text-[15px]">Lighter nights</span>
               <span className="block text-xs text-faint">Just one good thing each night.</span>
             </span>
-            <input
-              type="checkbox"
-              checked={settings.light}
-              onChange={(e) => updateSettings({ light: e.target.checked })}
-              className="h-5 w-5 accent-[var(--accent)]"
-            />
+            <input type="checkbox" checked={settings.light} onChange={(e) => updateSettings({ light: e.target.checked })} className="h-5 w-5 accent-[var(--accent)]" />
           </label>
         </Card>
 
@@ -119,6 +118,7 @@ export function Settings() {
           </div>
           <Chevron dir="right" className="h-5 w-5 text-faint" />
         </button>
+        {!plus && <RestoreButton className="-mt-2" />}
 
         <button onClick={() => go('backup')} className="flex items-center justify-between rounded-3xl border border-line bg-surface px-5 py-4 text-left">
           <div>
@@ -137,6 +137,7 @@ export function Settings() {
         </a>
 
         {showTools && <PrototypeTools />}
+        <PreviewBar />
 
         <div className="flex flex-col items-center gap-1 pt-2 pb-2">
           <Button variant="ghost" className="text-sm" onClick={() => (confirmReset ? (reset(), setConfirmReset(false)) : setConfirmReset(true))}>
@@ -195,15 +196,21 @@ function PrototypeTools() {
   )
 }
 
-/** Plus palettes and heading fonts. Free users see them and are taken to Plus when they tap one. */
+/** Plus palettes and heading fonts. Free users can tap one to preview it while Settings is open. */
 function Looks() {
   const settings = useStore((s) => s.settings)
   const updateSettings = useStore((s) => s.updateSettings)
   const plus = useStore((s) => s.plus)
-  const go = useUI((s) => s.go)
-  const palette = plus ? settings.palette : 'ember'
-  const font = plus ? settings.font : 'fraunces'
-  const choose = (patch: Partial<typeof settings>) => (plus ? updateSettings(patch) : go('plus'))
+  const preview = useUI((s) => s.preview)
+  const setPreview = useUI((s) => s.setPreview)
+  const palette = preview?.palette ?? (plus ? settings.palette : 'ember')
+  const font = preview?.font ?? (plus ? settings.font : 'fraunces')
+  const choose = (patch: { palette?: Palette; font?: HeadingFont }) => {
+    if (plus) return updateSettings(patch)
+    const next = { ...preview, ...patch }
+    const isDefault = (next.palette ?? 'ember') === 'ember' && (next.font ?? 'fraunces') === 'fraunces'
+    setPreview(isDefault ? null : next)
+  }
   return (
     <div className="mt-5 border-t border-line pt-4">
       <div className="flex items-center justify-between">
@@ -215,9 +222,17 @@ function Looks() {
           <button key={p.id} onClick={() => choose({ palette: p.id })} className="flex flex-col items-center gap-1.5" aria-pressed={palette === p.id}>
             <span
               className={`relative flex h-11 w-11 items-center justify-center rounded-full border transition ${palette === p.id ? 'border-ink' : 'border-line'}`}
-              style={{ background: `linear-gradient(135deg, ${p.day.bg} 50%, ${p.evening.bg} 50%)` }}
+              style={{
+                background: `linear-gradient(135deg, ${p.day.bg} 50%, ${p.evening.bg} 50%)`,
+              }}
             >
-              <span className="h-4 w-4 rounded-full" style={{ background: p.day.accent, boxShadow: `0 0 0 2px ${p.evening.accent}` }} />
+              <span
+                className="h-4 w-4 rounded-full"
+                style={{
+                  background: p.day.accent,
+                  boxShadow: `0 0 0 2px ${p.evening.accent}`,
+                }}
+              />
             </span>
             <span className={`text-[11px] ${palette === p.id ? 'font-semibold text-ink' : 'text-muted'}`}>{p.label}</span>
           </button>
@@ -229,6 +244,7 @@ function Looks() {
           <button
             key={f.id}
             onClick={() => choose({ font: f.id })}
+            aria-pressed={font === f.id}
             style={{ fontFamily: f.stack }}
             className={`rounded-full py-2 text-[15px] transition ${font === f.id ? 'bg-surface font-semibold text-ink shadow-sm' : 'text-muted'}`}
           >
@@ -236,7 +252,36 @@ function Looks() {
           </button>
         ))}
       </div>
+      {!plus && <p className="mt-3 text-xs text-faint">Tap one to try it.</p>}
     </div>
+  )
+}
+
+/** Shown while a free user tries a Plus palette or font. */
+function PreviewBar() {
+  const preview = useUI((s) => s.preview)
+  const setPreview = useUI((s) => s.setPreview)
+  const go = useUI((s) => s.go)
+  if (!preview) return null
+  const name = [preview.palette && paletteDef(preview.palette).label, preview.font && FONTS.find((f) => f.id === preview.font)!.label].filter(Boolean).join(' and ')
+  return (
+    <>
+      {/* Room so the bar never covers the last setting. */}
+      <div className="h-20" aria-hidden="true" />
+      <div className="safe-bottom fixed inset-x-0 bottom-0 z-10 mx-auto max-w-md px-4 pt-3">
+        <div role="status" className="flex items-center gap-3 rounded-3xl border border-line bg-surface px-4 py-3 shadow-[0_20px_60px_-20px_rgb(0_0_0/0.45)]">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold">Previewing {name}</div>
+            <button onClick={() => go('plus')} className="text-xs text-accent">
+              Unlock with Plus
+            </button>
+          </div>
+          <Button variant="quiet" className="shrink-0 px-4 py-2 text-sm" onClick={() => setPreview(null)}>
+            Back to Ember
+          </Button>
+        </div>
+      </div>
+    </>
   )
 }
 
@@ -245,30 +290,28 @@ function PromptPacks() {
   const updateSettings = useStore((s) => s.updateSettings)
   const plus = useStore((s) => s.plus)
   const go = useUI((s) => s.go)
+  const open = (id: PackId) => plus || FREE_PACKS.includes(id)
   const toggle = (id: PackId) => {
-    if (!plus) return go('plus')
-    updateSettings({ packs: packs.includes(id) ? packs.filter((p) => p !== id) : [...packs, id] })
+    if (!open(id)) return go('plus')
+    updateSettings({
+      packs: packs.includes(id) ? packs.filter((p) => p !== id) : [...packs, id],
+    })
   }
   return (
     <Card>
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-muted">Prompt packs</div>
-        {!plus && <PlusBadge />}
-      </div>
+      <div className="text-xs text-muted">Prompt packs</div>
       <ul className="mt-1 flex flex-col divide-y divide-line">
         {PACKS.map((p) => (
           <li key={p.id}>
             <label className="flex items-center justify-between gap-4 py-3">
               <span>
-                <span className="block text-[15px]">{p.label}</span>
+                <span className="flex items-center gap-2 text-[15px]">
+                  {p.label}
+                  {!open(p.id) && <PlusBadge />}
+                </span>
                 <span className="block text-xs text-faint">{p.text}</span>
               </span>
-              <input
-                type="checkbox"
-                checked={plus && packs.includes(p.id)}
-                onChange={() => toggle(p.id)}
-                className="h-5 w-5 shrink-0 accent-[var(--accent)]"
-              />
+              <input type="checkbox" checked={open(p.id) && packs.includes(p.id)} onChange={() => toggle(p.id)} className="h-5 w-5 shrink-0 accent-[var(--accent)]" />
             </label>
           </li>
         ))}

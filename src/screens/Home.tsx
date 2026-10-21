@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion'
-import { InstallSteps } from '../components/evening'
 import { Button, Card, Chevron, Sparkle } from '../components/ui'
 import { useNow } from '../hooks'
 import { needsBackupReminder } from '../lib/backup'
@@ -7,7 +6,7 @@ import { formatLongDate, greeting, isEvening } from '../lib/dates'
 import { whyLineFor } from '../lib/prompts'
 import { reviewYearFor, YEAR_MIN_ENTRIES, yearReview } from '../lib/insights'
 import { resurface } from '../lib/stats'
-import { isReflectionTime, isStandalone } from '../lib/reminder'
+import { isReflectionTime } from '../lib/reminder'
 import { isReflectionNight } from '../lib/rhythm'
 import { computeStreak } from '../lib/streak'
 import { useStore } from '../store'
@@ -22,8 +21,6 @@ export function Home() {
   const rhythm = useStore((s) => s.settings.rhythm)
   const reminderTime = useStore((s) => s.settings.reminderTime)
   const backup = useStore((s) => s.backup)
-  const installDismissed = useStore((s) => s.installDismissed)
-  const dismissInstall = useStore((s) => s.dismissInstall)
   const dismissBackupReminder = useStore((s) => s.dismissBackupReminder)
   const startReflection = useStore((s) => s.startReflection)
   const go = useUI((s) => s.go)
@@ -33,14 +30,13 @@ export function Home() {
   const inProgress = draft?.date === today && !done
   const streak = computeStreak(entries, today, rhythm)
   const restNight = !done && !inProgress && !isReflectionNight(today, rhythm)
-  // One card at a time: installing matters most on iPhone, since Safari can clear a site's data.
-  const suggestInstall = !installDismissed && !isStandalone()
-  const remindBackup = !suggestInstall && needsBackupReminder(Object.keys(entries).length, backup, now.getTime())
+  // One card at a time: a backup reminder first, then the year in review, then a memory.
+  const remindBackup = needsBackupReminder(Object.keys(entries).length, backup, now.getTime())
   const yearSeen = useStore((s) => s.yearSeen)
   const reviewYear = reviewYearFor(today)
   // In December, the year in review takes the memory card's place until it's been opened.
   const yearReady =
-    !suggestInstall && !remindBackup && reviewYear !== null && yearSeen !== reviewYear && yearReview(entries, reviewYear).nights >= YEAR_MIN_ENTRIES
+    !remindBackup && reviewYear !== null && yearSeen !== reviewYear && yearReview(entries, reviewYear).nights >= YEAR_MIN_ENTRIES
   const memory = resurface(entries, today)
   const evening = isEvening(now)
   const reflectionTime = !done && !restNight && isReflectionTime(now, reminderTime)
@@ -119,18 +115,6 @@ export function Home() {
       </motion.div>
 
       <div className="safe-bottom flex flex-col gap-3 pb-2">
-        {suggestInstall && (
-          <Card className="text-left">
-            <div className="flex items-start justify-between gap-3">
-              <div className="text-[15px] font-semibold">Keep Gleam on your Home Screen</div>
-              <button onClick={dismissInstall} className="-mt-1 -mr-2 shrink-0 px-2 py-1 text-sm whitespace-nowrap text-faint" aria-label="Dismiss">
-                Not now
-              </button>
-            </div>
-            <p className="mt-1 text-sm leading-relaxed text-muted">It keeps your reflections safer on iPhone and gets Gleam ready for reminders.</p>
-            <InstallSteps />
-          </Card>
-        )}
         {remindBackup && (
           <Card className="text-left">
             <div className="text-[15px] font-semibold">{Object.keys(entries).length} evenings saved</div>
@@ -154,7 +138,7 @@ export function Home() {
             <Sparkle className="h-5 w-5 text-accent" />
           </button>
         )}
-        {!remindBackup && !suggestInstall && !yearReady && memory && (
+        {!remindBackup && !yearReady && memory && (
           <Card className="text-left">
             <div className="text-xs text-faint">{memory.lead}</div>
             <div className="mt-1.5 font-serif text-lg leading-snug">{memory.gratitude.text}</div>

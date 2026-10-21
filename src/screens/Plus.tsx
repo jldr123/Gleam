@@ -1,6 +1,9 @@
 import { motion } from 'framer-motion'
+import { useState } from 'react'
+import { RestoreButton, usePlusProduct } from '../components/plus'
 import { Button, Card, Sparkle, TopBar } from '../components/ui'
-import { PLUS_FEATURES, PLUS_PRICE } from '../lib/plus'
+import { PLUS_FEATURES } from '../lib/plus'
+import { isPrototypePurchase, purchasePlus } from '../lib/purchase'
 import { useStore } from '../store'
 import { useUI } from '../ui'
 
@@ -8,8 +11,23 @@ export function Plus() {
   const plus = useStore((s) => s.plus)
   const setPlus = useStore((s) => s.setPlus)
   const go = useUI((s) => s.go)
-  const prev = useUI((s) => s.prev)
-  const back = () => go(prev === 'plus' ? 'settings' : prev)
+  const back = useUI((s) => s.back)
+  const product = usePlusProduct()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const buy = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await purchasePlus()
+      if (result.ok) setPlus(true)
+      else setError(result.message)
+    } catch {
+      setError("Couldn't reach the App Store. Try again in a moment.")
+    }
+    setBusy(false)
+  }
 
   return (
     <div className="glow flex min-h-full flex-col">
@@ -48,13 +66,21 @@ export function Plus() {
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2 text-center">
-            <Button className="w-full" onClick={() => setPlus(true)}>
-              Unlock for {PLUS_PRICE}
+            <Button className="w-full" onClick={buy} disabled={busy}>
+              Unlock for {product.price}
             </Button>
-            <div className="text-xs text-faint">One payment, yours to keep. No subscription.</div>
-            <p className="mt-3 max-w-[19rem] text-xs leading-relaxed text-faint">
-              In this prototype, unlocking is free so you can try it. The App Store version will take payment through Apple.
-            </p>
+            <div className="text-xs text-faint">{product.terms}</div>
+            {error && (
+              <p role="alert" className="text-sm text-muted">
+                {error}
+              </p>
+            )}
+            <RestoreButton className="mt-1" />
+            {isPrototypePurchase() && (
+              <p className="mt-2 max-w-[19rem] text-xs leading-relaxed text-faint">
+                In this prototype, unlocking is free so you can try it. The App Store version will take payment through Apple.
+              </p>
+            )}
           </div>
         )}
       </motion.div>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { PlusGate } from '../components/plus'
 import { Card, TopBar } from '../components/ui'
 import { insights, inRange, longestRun, RANGES, type Insights, type Range, type WeekdayMood } from '../lib/insights'
@@ -13,17 +13,16 @@ export function Stats() {
   const entries = useStore((s) => s.entries)
   const today = useStore((s) => s.today())
   const rhythm = useStore((s) => s.settings.rhythm)
-  const go = useUI((s) => s.go)
-  const prev = useUI((s) => s.prev)
+  const back = useUI((s) => s.back)
   const [range, setRange] = useState<Range>(30)
 
-  const list = inRange(entries, today, range)
-  const data = insights(list)
-  const longest = longestRun(entries, today, rhythm)
+  // The screen re-renders on every clock tick, so the sums only rerun when the entries, day or range change.
+  const data = useMemo(() => insights(inRange(entries, today, range)), [entries, today, range])
+  const longest = useMemo(() => longestRun(entries, today, rhythm), [entries, today, rhythm])
 
   return (
     <div className="flex min-h-full flex-col">
-      <TopBar onBack={() => go(prev === 'stats' || prev === 'plus' ? 'bank' : prev)} title="Your stats" />
+      <TopBar onBack={back} title="Your stats" />
       <div className="safe-bottom flex flex-col gap-4 px-5 pt-2">
         <div className="grid grid-cols-3 gap-1 rounded-full bg-surface-2 p-1" role="tablist">
           {RANGES.map((r) => (
@@ -44,7 +43,7 @@ export function Stats() {
             {[
               { value: data.nights, label: data.nights === 1 ? 'night reflected' : 'nights reflected' },
               { value: data.gratitudes, label: 'good things saved' },
-              { value: longest, label: 'longest streak' },
+              { value: longest, label: 'longest streak ever' },
             ].map((s) => (
               <div key={s.label}>
                 <div className="font-serif text-[28px] font-light tabular-nums">{s.value}</div>

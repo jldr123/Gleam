@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { isEvening } from './lib/dates'
 import { activeLook, FONTS, paletteDef } from './lib/plus'
 import { useStore } from './store'
+import { useUI } from './ui'
 
 /** The app's clock (real time plus any developer offset), refreshed every 30 seconds. */
 export function useNow(): Date {
@@ -23,10 +24,11 @@ export function useNow(): Date {
 export function useThemeClass(): void {
   const settings = useStore((s) => s.settings)
   const plus = useStore((s) => s.plus)
+  const preview = useUI((s) => s.preview)
   const now = useNow()
   const theme = settings.theme
   const dark = theme === 'dark' || (theme === 'auto' && isEvening(now))
-  const { palette, font } = activeLook(settings, plus)
+  const { palette, font } = activeLook(settings, plus, preview)
   useEffect(() => {
     const root = document.documentElement
     root.classList.toggle('evening', dark)

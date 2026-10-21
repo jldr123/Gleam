@@ -201,7 +201,9 @@ export function promptOptions(date: string, entries: Record<string, Entry>, mood
 
   const past = Object.values(entries).filter((e) => e.date < date)
   const lastNight = entries[addDays(date, -1)]?.lens
-  const allowed = lensesFor(branch)
+  // With Hard seasons on, an ordinary night can also bring one of its gentle questions, as one turn of the rotation.
+  const hardSeasons = branch === 'normal' && packs.includes('hardSeasons')
+  const allowed = hardSeasons ? [...lensesFor(branch), 'hardDay' as Lens] : lensesFor(branch)
   const lenses = allowed.length > 1 ? allowed.filter((l) => l !== lastNight) : allowed
 
   const daysSince = (lens: Lens) => {
@@ -212,7 +214,9 @@ export function promptOptions(date: string, entries: Record<string, Entry>, mood
 
   const recent = new Set(past.filter((e) => daysBetween(e.date, date) <= PROMPT_REPEAT_DAYS).map((e) => e.promptId))
   const perLens = ordered.map((lens) => {
-    const all = PROMPTS.filter((p) => p.lens === lens && !p.retired && (!p.pack || packs.includes(p.pack)))
+    const all = PROMPTS.filter(
+      (p) => p.lens === lens && !p.retired && (!p.pack || packs.includes(p.pack)) && (branch !== 'normal' || lens !== 'hardDay' || p.pack === 'hardSeasons'),
+    )
     const fresh = all.filter((p) => !recent.has(p.id))
     // Questions from packs the user turned on come first within their lens.
     const fromPack = (p: Prompt) => (p.pack ? 0 : 1)
