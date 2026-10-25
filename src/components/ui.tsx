@@ -31,7 +31,7 @@ export function Chevron({ dir = 'left', className = '' }: { dir?: 'left' | 'righ
 type Variant = 'primary' | 'quiet' | 'ghost'
 
 const variants: Record<Variant, string> = {
-  primary: 'bg-accent text-accent-ink shadow-[0_8px_30px_-10px_var(--glow)] active:scale-[0.98]',
+  primary: 'bg-button text-button-ink shadow-[var(--button-shadow)] active:scale-[0.98]',
   quiet: 'bg-surface-2 text-ink active:scale-[0.98]',
   ghost: 'text-muted active:text-ink',
 }

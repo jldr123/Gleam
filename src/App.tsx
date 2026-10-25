@@ -1,3 +1,4 @@
+import { MotionConfig } from 'framer-motion'
 import type { ComponentType } from 'react'
 import { useThemeClass } from './hooks'
 import { Backup } from './screens/Backup'
@@ -29,8 +30,11 @@ export default function App() {
   const onboarded = useStore((s) => s.onboarded)
   const Current = onboarded ? screens[screen] : Welcome
   return (
-    <div className="mx-auto h-full max-w-md overflow-y-auto">
-      <Current />
-    </div>
+    // With reduced motion set, framer-motion skips movement and scaling everywhere.
+    <MotionConfig reducedMotion="user">
+      <div className="mx-auto h-full max-w-md overflow-y-auto">
+        <Current />
+      </div>
+    </MotionConfig>
   )
 }

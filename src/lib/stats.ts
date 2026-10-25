@@ -33,20 +33,25 @@ export const THEME_MIN_EVENINGS = 3
 export interface Theme {
   word: string
   count: number
+  /** Usually written with a capital mid-sentence, so probably a name or place. */
+  proper?: boolean
 }
 
 /** The words that keep coming up in your gratitudes, most frequent first. */
 export function topThemes(entries: Entry[], limit = 5): Theme[] {
   const counts = new Map<string, number>()
+  // How often each word is capitalised away from the start of a line, against how often it isn't.
+  const capitals = new Map<string, number>()
   for (const e of entries) {
     // Count each word once per night so one long entry doesn't dominate.
     const seen = new Set<string>()
     for (const g of e.gratitudes) {
-      for (const raw of g.text.toLowerCase().match(/[a-z][a-z']+/g) ?? []) {
-        const word = raw.replace(/'s$/, '')
-        if (word.length < 3 || STOPWORDS.has(word) || NOT_THINGS.has(word)) continue
+      ;(g.text.match(/[A-Za-z][A-Za-z'’]+/g) ?? []).forEach((raw, i) => {
+        const word = raw.toLowerCase().replace(/['’]s$/, '')
+        if (word.length < 3 || STOPWORDS.has(word) || NOT_THINGS.has(word)) return
         seen.add(word)
-      }
+        if (i > 0) capitals.set(word, (capitals.get(word) ?? 0) + (raw[0] === raw[0].toUpperCase() ? 1 : -1))
+      })
     }
     for (const w of seen) counts.set(w, (counts.get(w) ?? 0) + 1)
   }
@@ -54,7 +59,7 @@ export function topThemes(entries: Entry[], limit = 5): Theme[] {
     .filter(([, c]) => c >= THEME_MIN_EVENINGS)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, limit)
-    .map(([word, count]) => ({ word, count }))
+    .map(([word, count]) => ((capitals.get(word) ?? 0) > 0 ? { word, count, proper: true } : { word, count }))
 }
 
 export function totalGratitudes(entries: Entry[]): number {

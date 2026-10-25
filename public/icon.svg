@@ -1,12 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
-    <radialGradient id="g" cx="50%" cy="58%" r="55%">
-      <stop offset="0" stop-color="#ffd9a0"/>
-      <stop offset="0.35" stop-color="#e9a25c"/>
-      <stop offset="1" stop-color="#1a1410" stop-opacity="0"/>
+    <linearGradient id="night" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a1d14"/>
+      <stop offset="1" stop-color="#140e0a"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="50%" cy="52%" r="46%">
+      <stop offset="0" stop-color="#f2a65a" stop-opacity="0.62"/>
+      <stop offset="0.45" stop-color="#d9823f" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#d9823f" stop-opacity="0"/>
     </radialGradient>
+    <linearGradient id="spark" x1="0.3" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#ffe2b0"/>
+      <stop offset="0.55" stop-color="#f5b56a"/>
+      <stop offset="1" stop-color="#e48b45"/>
+    </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="#1a1410"/>
-  <circle cx="256" cy="296" r="230" fill="url(#g)" opacity="0.55"/>
-  <path d="M256 150 C268 228 284 244 362 256 C284 268 268 284 256 362 C244 284 228 268 150 256 C228 244 244 228 256 150 Z" fill="#fff1dc"/>
+  <rect width="1024" height="1024" rx="228" fill="url(#night)"/>
+  <circle cx="512" cy="532" r="470" fill="url(#halo)"/>
+  <!-- The Gleam sparkle: four soft points, a little taller than wide. -->
+  <path d="M512 196 C534 390 576 466 764 520 C576 574 534 650 512 844 C490 650 448 574 260 520 C448 466 490 390 512 196 Z" fill="url(#spark)"/>
 </svg>

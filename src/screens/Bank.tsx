@@ -2,8 +2,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { PlusBadge } from '../components/plus'
 import { Card, Chevron, Star, TopBar } from '../components/ui'
 import { formatLongDate, formatMonth, weekdayLetter } from '../lib/dates'
-import { finishedMonths, monthKey, type MonthSummary } from '../lib/months'
-import { moodWeek, thanksSent, topThemes, totalGratitudes } from '../lib/stats'
+import { countPeople, finishedMonths, monthKey, topThings, type MonthSummary } from '../lib/months'
+import { moodWeek, thanksSent, totalGratitudes } from '../lib/stats'
 import { computeStreak } from '../lib/streak'
 import { MOODS, type Entry } from '../lib/types'
 import { useStore } from '../store'
@@ -67,12 +67,13 @@ function Summary({ entries, list, today }: { entries: Record<string, Entry>; lis
   const rhythm = useStore((s) => s.settings.rhythm)
   const streak = computeStreak(entries, today, rhythm)
   const week = moodWeek(entries, today)
-  const themes = topThemes(list)
+  // Things only: people have their own place in stats and the month look-back.
+  const themes = topThings(list, countPeople(list), 5)
   const thanks = thanksSent(list)
   const stats = [
-    { value: totalGratitudes(list), label: 'good things saved' },
     { value: list.length, label: list.length === 1 ? 'night reflected' : 'nights reflected' },
-    { value: streak.nights, label: 'night streak' },
+    { value: totalGratitudes(list), label: 'good things saved' },
+    { value: streak.nights, label: 'current streak' },
   ]
   return (
     <Card>
@@ -108,7 +109,7 @@ function Summary({ entries, list, today }: { entries: Record<string, Entry>; lis
           <div className="flex flex-wrap gap-1.5">
             {themes.map((t) => (
               <span key={t.word} className="rounded-full bg-surface-2 px-3 py-1 text-sm">
-                {t.word} <span className="text-faint">{t.count}</span>
+                {t.word} <span className="text-muted">{t.count}</span>
               </span>
             ))}
           </div>
