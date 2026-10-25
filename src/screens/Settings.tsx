@@ -3,11 +3,12 @@ import { ReminderButton, RhythmPicker, TimeInput } from '../components/evening'
 import { PlusBadge, RestoreButton } from '../components/plus'
 import { Button, Card, Chevron, Sparkle, TopBar } from '../components/ui'
 import { SUPPORT_URL } from '../lib/flow'
-import { FONTS, FREE_PACKS, PALETTES, paletteDef } from '../lib/plus'
+import { FONTS, FREE_PACKS, lookName, PALETTES } from '../lib/plus'
 import { PACKS } from '../lib/prompts'
 import type { HeadingFont, PackId, Palette, Theme } from '../lib/types'
 import { useStore } from '../store'
 import { useUI } from '../ui'
+import { carryPreviewToPlus } from '../unlock'
 
 const themes: { value: Theme; label: string }[] = [
   { value: 'auto', label: 'Auto' },
@@ -261,9 +262,8 @@ function Looks() {
 function PreviewBar() {
   const preview = useUI((s) => s.preview)
   const setPreview = useUI((s) => s.setPreview)
-  const go = useUI((s) => s.go)
   if (!preview) return null
-  const name = [preview.palette && paletteDef(preview.palette).label, preview.font && FONTS.find((f) => f.id === preview.font)!.label].filter(Boolean).join(' and ')
+  const name = lookName(preview)
   return (
     <>
       {/* Room so the bar never covers the last setting. */}
@@ -272,7 +272,7 @@ function PreviewBar() {
         <div role="status" className="flex items-center gap-3 rounded-3xl border border-line bg-surface px-4 py-3 shadow-[0_20px_60px_-20px_rgb(0_0_0/0.45)]">
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-semibold">Previewing {name}</div>
-            <button onClick={() => go('plus')} className="text-xs text-accent">
+            <button onClick={carryPreviewToPlus} className="text-xs text-accent">
               Unlock with Plus
             </button>
           </div>

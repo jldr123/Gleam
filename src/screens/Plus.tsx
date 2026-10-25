@@ -2,26 +2,29 @@ import { motion } from 'framer-motion'
 import { useState } from 'react'
 import { RestoreButton, usePlusProduct } from '../components/plus'
 import { Button, Card, Sparkle, TopBar } from '../components/ui'
-import { PLUS_FEATURES } from '../lib/plus'
+import { lookName, PLUS_FEATURES } from '../lib/plus'
 import { isPrototypePurchase, purchasePlus } from '../lib/purchase'
 import { useStore } from '../store'
-import { useUI } from '../ui'
+import { useUI, type LookPreview } from '../ui'
+import { unlockPlus } from '../unlock'
 
 export function Plus() {
   const plus = useStore((s) => s.plus)
-  const setPlus = useStore((s) => s.setPlus)
+  const pendingLook = useUI((s) => s.pendingLook)
   const go = useUI((s) => s.go)
   const back = useUI((s) => s.back)
   const product = usePlusProduct()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The look that came with the unlock, to say it's theirs now.
+  const [kept, setKept] = useState<LookPreview | null>(null)
 
   const buy = async () => {
     setBusy(true)
     setError(null)
     try {
       const result = await purchasePlus()
-      if (result.ok) setPlus(true)
+      if (result.ok) setKept(unlockPlus())
       else setError(result.message)
     } catch {
       setError("Couldn't reach the App Store. Try again in a moment.")
@@ -59,6 +62,11 @@ export function Plus() {
 
         {plus ? (
           <div className="flex flex-col gap-2">
+            {kept && (
+              <p className="pb-2 text-center font-serif text-[18px]">
+                {lookName(kept)} {kept.palette && kept.font ? 'are' : 'is'} now yours.
+              </p>
+            )}
             <Button onClick={() => go('stats')}>See your stats</Button>
             <Button variant="quiet" onClick={() => go('year')}>
               Your year in Gleam
@@ -66,6 +74,11 @@ export function Plus() {
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2 text-center">
+            {pendingLook && (
+              <p className="pb-1 text-sm text-muted">
+                You're previewing {lookName(pendingLook)}. Unlock to keep {pendingLook.palette && pendingLook.font ? 'them' : 'it'}.
+              </p>
+            )}
             <Button className="w-full" onClick={buy} disabled={busy}>
               Unlock for {product.price}
             </Button>
@@ -75,7 +88,7 @@ export function Plus() {
                 {error}
               </p>
             )}
-            <RestoreButton className="mt-1" />
+            <RestoreButton className="mt-1" onRestored={setKept} />
             {isPrototypePurchase() && (
               <p className="mt-2 max-w-[19rem] text-xs leading-relaxed text-faint">
                 In this prototype, unlocking is free so you can try it. The App Store version will take payment through Apple.

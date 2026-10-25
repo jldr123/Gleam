@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { DEFAULT_PRODUCT, getProduct, restorePlus, type PlusProduct } from '../lib/purchase'
 import { useStore } from '../store'
-import { useUI } from '../ui'
+import { useUI, type LookPreview } from '../ui'
+import { unlockPlus } from '../unlock'
 import { Button, Sparkle } from './ui'
 
 /** A small "Plus" tag beside things that need Gleam Plus. */
@@ -46,7 +47,9 @@ export function usePlusProduct(): PlusProduct {
   const [product, setProduct] = useState(DEFAULT_PRODUCT)
   useEffect(() => {
     let live = true
-    getProduct().then((p) => live && setProduct(p)).catch(() => {})
+    getProduct()
+      .then((p) => live && setProduct(p))
+      .catch(() => {})
     return () => {
       live = false
     }
@@ -55,16 +58,15 @@ export function usePlusProduct(): PlusProduct {
 }
 
 /** "Restore purchase", for a new phone or a reinstall. Says what happened in place. */
-export function RestoreButton({ className = '' }: { className?: string }) {
-  const setPlus = useStore((s) => s.setPlus)
+export function RestoreButton({ className = '', onRestored }: { className?: string; onRestored?: (look: LookPreview | null) => void }) {
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const restore = async () => {
     setBusy(true)
     try {
       const result = await restorePlus()
-      if (result.restored) setPlus(true)
       setMessage(result.message)
+      if (result.restored) onRestored?.(unlockPlus())
     } catch {
       setMessage("Couldn't reach the App Store. Try again in a moment.")
     }

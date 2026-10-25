@@ -24,7 +24,7 @@ export function useNow(): Date {
 export function useThemeClass(): void {
   const settings = useStore((s) => s.settings)
   const plus = useStore((s) => s.plus)
-  const preview = useUI((s) => s.preview)
+  const preview = useUI((s) => s.preview ?? s.pendingLook)
   const now = useNow()
   const theme = settings.theme
   const dark = theme === 'dark' || (theme === 'auto' && isEvening(now))

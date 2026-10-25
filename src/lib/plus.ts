@@ -93,6 +93,11 @@ export function paletteDef(id: Palette): PaletteDef {
   return PALETTES.find((p) => p.id === id) ?? PALETTES[0]
 }
 
+/** "Dusk", "Modern" or "Dusk and Modern", for a previewed look. */
+export function lookName(look: { palette?: Palette; font?: HeadingFont }): string {
+  return [look.palette && paletteDef(look.palette).label, look.font && FONTS.find((f) => f.id === look.font)?.label].filter(Boolean).join(' and ')
+}
+
 /** The look actually shown: Plus choices only apply while Plus is unlocked, and a free preview shows over either. */
 export function activeLook(
   settings: Settings,
