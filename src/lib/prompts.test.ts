@@ -90,3 +90,62 @@ describe('lens rotation', () => {
     expect(promptFor(START, {}, 4, 1).lens).not.toBe(promptFor(START, {}, 4, 0).lens)
   })
 })
+
+describe('prompt packs', () => {
+  const packIds = new Set(PROMPTS.filter((p) => p.pack).map((p) => p.id))
+
+  it('never asks a pack question unless that pack is on', () => {
+    for (let i = 0; i < 60; i++) {
+      const date = addDays(START, i)
+      for (const mood of [1, 2, 3, 5] as Mood[]) {
+        for (const p of promptOptions(date, {}, mood)) expect(packIds.has(p.id)).toBe(false)
+      }
+    }
+  })
+
+  it('puts questions from a pack that is on first within their lens', () => {
+    const date = '2026-10-05'
+    const options = promptOptions(date, {}, 4, ['work'])
+    const firstOfLens = new Map<string, (typeof options)[number]>()
+    for (const p of options) if (!firstOfLens.has(p.lens)) firstOfLens.set(p.lens, p)
+    expect(firstOfLens.get('selfCredit')?.pack).toBe('work')
+    expect(options.some((p) => p.pack && p.pack !== 'work')).toBe(false)
+  })
+
+  it('keeps the very low night fixed even with packs on', () => {
+    expect(promptOptions('2026-10-05', {}, 1, ['hardSeasons'])).toEqual([LET_GO])
+  })
+
+  it('lets hard seasons questions come up on low nights', () => {
+    const options = promptOptions('2026-10-05', {}, 2, ['hardSeasons'])
+    expect(options.some((p) => p.pack === 'hardSeasons')).toBe(true)
+  })
+})
+
+describe('Hard seasons on ordinary nights', () => {
+  const simulateWith = (nights: number, mood: Mood, packs: ('hardSeasons' | 'work')[]) => {
+    const entries: Record<string, Entry> = {}
+    for (let i = 0; i < nights; i++) {
+      const date = addDays(START, i)
+      const p = promptFor(date, entries, mood, 0, packs)
+      entries[date] = entry(date, ['tea'], mood, { lens: p.lens, promptId: p.id, promptText: p.text })
+    }
+    return Object.values(entries)
+  }
+
+  it('brings its hard-day questions on Steady nights, now and then rather than every night', () => {
+    const nights = simulateWith(40, 3, ['hardSeasons'])
+    const hard = nights.filter((e) => e.lens === 'hardDay')
+    expect(hard.length).toBeGreaterThanOrEqual(3)
+    expect(hard.length).toBeLessThanOrEqual(8)
+    for (const e of hard) expect(PROMPTS.find((p) => p.id === e.promptId)?.pack).toBe('hardSeasons')
+  })
+
+  it('never asks the hard-day lens on ordinary nights without the pack', () => {
+    expect(simulateWith(40, 4, ['work']).some((e) => e.lens === 'hardDay')).toBe(false)
+  })
+
+  it('keeps the fixed question on Heavy nights', () => {
+    expect(promptOptions('2026-10-05', {}, 1, ['hardSeasons'])).toEqual([LET_GO])
+  })
+})

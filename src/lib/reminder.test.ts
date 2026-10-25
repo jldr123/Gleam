@@ -1,4 +1,5 @@
 import { formatTime, isReflectionTime, reminderIcs } from './reminder'
+import { reminderMessage } from './reminders'
 
 const at = (h: number, m = 0) => new Date(2026, 9, 20, h, m)
 
@@ -51,5 +52,13 @@ describe('calendar reminder', () => {
 
   it('escapes commas and semicolons in text', () => {
     expect(reminderIcs('21:30', { mode: 'nightly', nights: [] }, 'https://a.b/?x=1;y=2', now)).toContain('Open Gleam: https://a.b/?x=1\\;y=2')
+  })
+})
+
+describe('reminder messages', () => {
+  it('says what happened, at their time', () => {
+    expect(reminderMessage('scheduled', '21:30')).toBe('Done. Gleam will remind you at 9:30pm.')
+    expect(reminderMessage('calendar', '22:00')).toContain('10:00pm')
+    expect(reminderMessage('denied', '21:30')).toContain('later in Settings')
   })
 })
