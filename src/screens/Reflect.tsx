@@ -1,8 +1,9 @@
-import { AnimatePresence, motion } from 'framer-motion'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { AnimatePresence, motion, useAnimationControls, useReducedMotion } from 'framer-motion'
+import { useEffect, useRef, useState, type FocusEvent, type ReactNode } from 'react'
 import { Button, Sparkle, Star, TopBar } from '../components/ui'
 import { formatShortDay } from '../lib/dates'
 import { isHelpCheckNight } from '../lib/care'
+import { tapHaptic } from '../lib/haptics'
 import { closingLine, maxGratitudes, personFromDraft, specificityNudge, stepsFor, SUPPORT_URL, weekEntries } from '../lib/flow'
 import { thankYouDraft } from '../lib/people'
 import { LENS_LABELS, LOOKBACK, moodBranch } from '../lib/prompts'
@@ -57,7 +58,7 @@ export function Reflect() {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -24 }}
           transition={{ duration: 0.28, ease: 'easeOut' }}
-          className="flex flex-1 flex-col px-6 pt-8"
+          className={`flex flex-1 flex-col px-6 ${LOWERED.includes(step) ? 'lowered' : 'pt-8'}`}
         >
           {step === 'mood' && <MoodStep onNext={(s) => goTo(s)} />}
           {step === 'care' && <CareStep onNext={next} />}
@@ -72,6 +73,9 @@ export function Reflect() {
     </div>
   )
 }
+
+/** Short screens that sit a little lower instead of hugging the top. */
+const LOWERED: Step[] = ['mood', 'prompt', 'note']
 
 function Progress({ at, count }: { at: number; count: number }) {
   return (
@@ -109,6 +113,7 @@ function MoodStep({ onNext }: { onNext: (step: Step) => void }) {
   useEffect(() => () => clearTimeout(timer.current), [])
 
   const pick = (mood: Mood) => {
+    tapHaptic()
     setMood(mood)
     // Read the draft back: a new mood can add the care card.
     const steps = stepsFor(useStore.getState().draft ?? { ...draft, mood }, entries, rhythm)
@@ -125,7 +130,7 @@ function MoodStep({ onNext }: { onNext: (step: Step) => void }) {
           const active = draft.mood === m.value
           return (
             <button key={m.value} onClick={() => pick(m.value)} className="flex flex-1 flex-col items-center gap-2" aria-pressed={active}>
-              <MoodDot mood={m.value} active={active} />
+              <MoodDot mood={m.value} state={active ? 'selected' : draft.mood ? 'other' : 'idle'} />
               <span className={`text-xs ${active ? 'font-semibold text-ink' : 'text-muted'}`}>{m.label}</span>
             </button>
           )
@@ -188,7 +193,7 @@ function GratitudeStep({ onNext }: { onNext: () => void }) {
       />
       <div className="mt-7 flex flex-col gap-3">
         {draft.gratitudes.slice(0, shown).map((g, i) => (
-          <div key={i} className="rounded-3xl border border-line bg-surface px-5 py-3.5 focus-within:border-accent/50">
+          <GratitudeCard key={i} filled={!!g.text.trim()}>
             <textarea
               autoFocus={i === shown - 1}
               value={g.text}
@@ -199,16 +204,21 @@ function GratitudeStep({ onNext }: { onNext: () => void }) {
               className="field-sizing-content w-full bg-transparent text-[17px] leading-relaxed text-ink outline-none placeholder:text-faint"
             />
             {g.text.trim() && (
-              <input
-                value={g.because}
-                onChange={(e) => setGratitude(i, { because: e.target.value })}
-                placeholder={specificityNudge(g.text) ?? '...because'}
-                maxLength={MAX_TEXT_LENGTH}
-                aria-label="Why it mattered (optional)"
-                className="mt-1 w-full bg-transparent text-[15px] text-muted italic outline-none placeholder:text-faint"
-              />
+              // A fixed "because" so a typed reason still reads as one.
+              <label className="mt-1 flex items-baseline gap-1.5 text-[15px] italic">
+                <span className="shrink-0 text-faint">because</span>
+                <textarea
+                  value={g.because}
+                  onChange={(e) => setGratitude(i, { because: e.target.value })}
+                  placeholder={specificityNudge(g.text) ?? '...'}
+                  maxLength={MAX_TEXT_LENGTH}
+                  rows={1}
+                  aria-label="Why it mattered (optional)"
+                  className="field-sizing-content min-w-0 flex-1 bg-transparent text-muted outline-none placeholder:text-faint"
+                />
+              </label>
             )}
-          </div>
+          </GratitudeCard>
         ))}
         {shown < max && lastFilled && (
           <button onClick={() => setShown(shown + 1)} className="self-start px-1 text-sm text-accent">
@@ -222,6 +232,24 @@ function GratitudeStep({ onNext }: { onNext: () => void }) {
         </Button>
       </Footer>
     </>
+  )
+}
+
+/** One gratitude. When focus leaves a filled card it settles with a soft warm fill, so it feels kept. */
+function GratitudeCard({ filled, children }: { filled: boolean; children: ReactNode }) {
+  const settle = useAnimationControls()
+  const glow = useAnimationControls()
+  const reduce = useReducedMotion()
+  const onBlur = (e: FocusEvent<HTMLDivElement>) => {
+    if (!filled || reduce || e.currentTarget.contains(e.relatedTarget as Node | null)) return
+    settle.start({ scale: [1, 1.012, 1], transition: { duration: 0.45, ease: 'easeOut' } })
+    glow.start({ opacity: [0, 0.14, 0], transition: { duration: 0.9, ease: 'easeOut' } })
+  }
+  return (
+    <motion.div animate={settle} onBlur={onBlur} className="relative overflow-hidden rounded-3xl border border-line bg-surface px-5 py-3.5 focus-within:border-accent/50">
+      <motion.span aria-hidden="true" initial={{ opacity: 0 }} animate={glow} className="pointer-events-none absolute inset-0 bg-accent" />
+      <div className="relative">{children}</div>
+    </motion.div>
   )
 }
 
@@ -281,7 +309,10 @@ function LookbackStep({ onNext }: { onNext: () => void }) {
           return (
             <button
               key={o.date}
-              onClick={() => updateDraft({ weekPick: active ? null : o.date })}
+              onClick={() => {
+                if (!active) tapHaptic()
+                updateDraft({ weekPick: active ? null : o.date })
+              }}
               aria-pressed={active}
               className={`flex items-start gap-3 rounded-3xl border px-5 py-3.5 text-left transition ${active ? 'border-accent/60 bg-surface' : 'border-line bg-surface'}`}
             >
@@ -289,7 +320,13 @@ function LookbackStep({ onNext }: { onNext: () => void }) {
                 <div className="text-xs text-muted">{o.label}</div>
                 <div className="mt-0.5 font-serif text-[17px] leading-snug">{o.text}</div>
               </div>
-              <Star filled={active} className={`mt-1 h-5 w-5 ${active ? 'text-accent' : 'text-faint'}`} />
+              <motion.span
+                animate={active ? { scale: [1, 1.35, 1] } : { scale: 1 }}
+                transition={{ duration: 0.35, ease: 'easeOut' }}
+                className="mt-1 inline-flex"
+              >
+                <Star filled={active} className={`h-5 w-5 ${active ? 'text-accent' : 'text-faint'}`} />
+              </motion.span>
             </button>
           )
         })}
@@ -480,15 +517,32 @@ function SupportLink() {
   )
 }
 
-export function MoodDot({ mood, active = true, size = 'lg' }: { mood: number; active?: boolean; size?: 'lg' | 'sm' }) {
-  // Brighter and larger as the day gets better; never red for a hard day.
+type DotState = 'idle' | 'selected' | 'other'
+
+/**
+ * Brighter, larger and more glowing as the day gets better; never red for a hard day.
+ * Colours blend the accent into --dot-base rather than fading it, so they stay clear on the evening background.
+ */
+export function MoodDot({ mood, state = 'idle', size = 'lg' }: { mood: number; state?: DotState; size?: 'lg' | 'sm' }) {
+  const lift = (mood - 1) / 4
   const scale = 0.55 + mood * 0.09
   const dim = size === 'lg' ? 'h-12 w-12' : 'h-3.5 w-3.5'
+  const selected = state === 'selected'
+  const halo = size === 'lg' ? (selected ? 22 + lift * 10 : 6 + lift * 14) : 0
   return (
-    <span className={`flex ${dim} items-center justify-center rounded-full transition ${active ? 'bg-surface-2' : ''}`}>
-      <span
-        className="block rounded-full bg-accent transition"
-        style={{ width: `${scale * 100}%`, height: `${scale * 100}%`, opacity: active ? 0.35 + mood * 0.13 : 0.25 }}
+    <span className={`flex ${dim} items-center justify-center rounded-full transition ${selected ? 'bg-surface-2 ring-1 ring-accent/50' : ''}`}>
+      <motion.span
+        className="block rounded-full"
+        animate={selected ? { scale: [1, 1.18, 1.06] } : { scale: 1 }}
+        transition={{ duration: 0.4, ease: 'easeOut' }}
+        style={{
+          width: `${scale * 100}%`,
+          height: `${scale * 100}%`,
+          background: `color-mix(in oklab, var(--accent) ${Math.round(selected ? 75 + lift * 25 : state === 'other' ? 25 + lift * 25 : 45 + lift * 50)}%, var(--dot-base))`,
+          boxShadow: halo && state !== 'other' ? `0 0 ${halo}px ${selected ? 2 : 0}px color-mix(in oklab, var(--accent) ${Math.round((selected ? 45 : 12) + lift * 30)}%, transparent)` : undefined,
+          opacity: state === 'other' ? 0.75 : 1,
+          transition: 'opacity 0.3s, box-shadow 0.3s, background 0.3s',
+        }}
       />
     </span>
   )
@@ -504,17 +558,38 @@ function Close({ mood, date }: { mood: Mood | null; date: string }) {
   useEffect(() => {
     if (ask) markHelpAsked(date)
   }, [ask, date, markHelpAsked])
+  const reduce = useReducedMotion()
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 1 }}
-      className="glow safe-top safe-bottom flex min-h-full flex-col items-center justify-center px-8 text-center"
+      className="safe-top safe-bottom relative flex min-h-full flex-col items-center justify-center px-8 text-center"
     >
-      <motion.div initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, duration: 0.9 }}>
-        <Sparkle className="h-14 w-14 text-accent" />
+      {/* The glow and the words dim a little once the sparkle has breathed, like a lamp going down. */}
+      <motion.div
+        aria-hidden="true"
+        className="glow pointer-events-none absolute inset-0"
+        animate={reduce ? undefined : { opacity: [1, 1, 0.55] }}
+        transition={{ duration: 3.6, times: [0, 0.75, 1], ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="relative flex flex-col items-center"
+        animate={reduce ? undefined : { opacity: [1, 1, 0.8] }}
+        transition={{ duration: 3.6, times: [0, 0.75, 1], ease: 'easeInOut' }}
+      >
+        <motion.div className="relative" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, duration: 0.9 }}>
+          <motion.span
+            aria-hidden="true"
+            className="absolute -inset-5 rounded-full bg-accent blur-xl"
+            initial={{ opacity: 0 }}
+            animate={reduce ? { opacity: 0 } : { opacity: [0, 0.35, 0.08, 0.3, 0.1], scale: [0.8, 1.1, 0.9, 1.08, 0.95] }}
+            transition={{ duration: 2.8, delay: 0.4, ease: 'easeInOut' }}
+          />
+          <Sparkle className="relative h-14 w-14 text-accent" />
+        </motion.div>
+        <h2 className="mt-6 max-w-[18rem] font-serif text-[28px] leading-snug font-light">{closingLine(mood, date)}</h2>
       </motion.div>
-      <h2 className="mt-6 max-w-[18rem] font-serif text-[28px] leading-snug font-light">{closingLine(mood, date)}</h2>
       {moodBranch(mood) === 'veryLow' && <SupportLink />}
       {ask && <HelpCheck date={date} />}
       <Button variant="quiet" className="mt-10" onClick={() => go('home')}>

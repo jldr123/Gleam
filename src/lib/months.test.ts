@@ -1,4 +1,4 @@
-import { finishedMonths, monthKey, summariseMonth } from './months'
+import { countPeople, finishedMonths, monthKey, summariseMonth, topThings } from './months'
 import { entry } from '../test/fixtures'
 
 const g = (text: string, because = '') => ({ text, because })
@@ -48,5 +48,29 @@ describe('monthly look-back', () => {
 
   it('keys by year and month', () => {
     expect(monthKey('2026-09-30')).toBe('2026-09')
+  })
+})
+
+describe('topThings', () => {
+  const list = [
+    entry('2026-10-01', [], 4, { gratitudes: [g('Coffee with Sam'), g('A text from an old friend')] }),
+    entry('2026-10-02', [], 4, { gratitudes: [g('Sam made dinner'), g('My friend called'), g('Morning coffee')] }),
+    entry('2026-10-03', [], 4, { gratitudes: [g('A walk with Sam'), g('Coffee by the Thames'), g('Dinner with a friend')] }),
+    entry('2026-10-04', [], 4, { gratitudes: [g('Lunch by the Thames'), g('Seeing a friend')] }),
+    entry('2026-10-05', [], 4, { gratitudes: [g('The Thames at dusk')] }),
+  ]
+
+  it('leaves people out of the things', () => {
+    const words = topThings(list, countPeople(list), 5).map((t) => t.word.toLowerCase())
+    expect(words).toContain('coffee')
+    expect(words).not.toContain('sam')
+    expect(words).not.toContain('friend')
+  })
+
+  it('keeps the capital on a name the people finder missed', () => {
+    const words = topThings(list, new Map(), 5).map((t) => t.word)
+    expect(words).toContain('Sam')
+    expect(words).toContain('Thames')
+    expect(words).toContain('coffee')
   })
 })

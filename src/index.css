@@ -7,10 +7,15 @@
   --surface-2: #efe5d7;
   --line: rgb(80 50 20 / 0.1);
   --text: #2b211a;
-  --muted: #7d6b5c;
-  --faint: #b3a291;
+  --muted: #66564a;
+  --faint: #77695d;
   --accent: #c8743a;
   --accent-ink: #fff8ef;
+  --button: #c8743a;
+  --button-ink: #fff8ef;
+  --button-shadow: 0 8px 30px -10px var(--glow);
+  /* What mood dots blend the accent into: paler by day, lighter not muddier by night. */
+  --dot-base: var(--surface-2);
   --glow: rgb(232 160 92 / 0.35);
   --serif: 'Fraunces', ui-serif, Georgia, serif;
   color-scheme: light;
@@ -23,9 +28,14 @@
   --line: rgb(255 220 180 / 0.08);
   --text: #f5ebde;
   --muted: #a8968a;
-  --faint: #66574b;
+  --faint: #928579;
   --accent: #eaa25e;
   --accent-ink: #2a1703;
+  --button: #8a613a;
+  --button-ink: #f5ebde;
+  /* A softer halo at night. */
+  --button-shadow: 0 6px 24px -16px var(--glow);
+  --dot-base: var(--muted);
   --glow: rgb(234 162 94 / 0.28);
   color-scheme: dark;
 }
@@ -40,6 +50,8 @@
   --color-faint: var(--faint);
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
+  --color-button: var(--button);
+  --color-button-ink: var(--button-ink);
   --font-sans: 'Manrope', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-serif: var(--serif);
 }
@@ -90,4 +102,25 @@ textarea {
 /* The soft glow behind the home screen. */
 .glow {
   background: radial-gradient(60% 45% at 50% 30%, var(--glow), transparent 70%);
+}
+
+/* The mood, question and one-sentence screens sit lower, nearer the thumb. Less so on short screens or with the keyboard taking space. */
+.lowered {
+  padding-top: clamp(2rem, 15svh, 8.5rem);
+}
+
+@media (max-height: 620px) {
+  .lowered {
+    padding-top: 1.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

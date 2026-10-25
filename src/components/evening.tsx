@@ -35,7 +35,7 @@ export function RhythmPicker({ rhythm, onChange }: { rhythm: Rhythm; onChange: (
                 key={d.value}
                 onClick={() => onChange(toggleNight(rhythm, d.value))}
                 aria-pressed={on}
-                className={`h-10 flex-1 rounded-full text-xs transition ${on ? 'bg-accent font-semibold text-accent-ink' : 'bg-surface-2 text-muted'}`}
+                className={`h-10 flex-1 rounded-full text-xs transition ${on ? 'bg-button font-semibold text-button-ink' : 'bg-surface-2 text-muted'}`}
               >
                 {d.short}
               </button>

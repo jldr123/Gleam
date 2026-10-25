@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="night" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a1d14"/>
+      <stop offset="1" stop-color="#140e0a"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="50%" cy="52%" r="46%">
+      <stop offset="0" stop-color="#f2a65a" stop-opacity="0.62"/>
+      <stop offset="0.45" stop-color="#d9823f" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#d9823f" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="spark" x1="0.3" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#ffe2b0"/>
+      <stop offset="0.55" stop-color="#f5b56a"/>
+      <stop offset="1" stop-color="#e48b45"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#night)"/>
+  <circle cx="512" cy="532" r="470" fill="url(#halo)"/>
+  <!-- The Gleam sparkle: four soft points, a little taller than wide. -->
+  <path d="M512 196 C534 390 576 466 764 520 C576 574 534 650 512 844 C490 650 448 574 260 520 C448 466 490 390 512 196 Z" fill="url(#spark)"/>
+</svg>

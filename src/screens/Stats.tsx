@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { PlusGate } from '../components/plus'
 import { Card, TopBar } from '../components/ui'
 import { insights, inRange, longestRun, RANGES, type Insights, type Range, type WeekdayMood } from '../lib/insights'
+import { computeStreak } from '../lib/streak'
 import { MOODS } from '../lib/types'
 import { useStore } from '../store'
 import { useUI } from '../ui'
@@ -19,6 +20,7 @@ export function Stats() {
   // The screen re-renders on every clock tick, so the sums only rerun when the entries, day or range change.
   const data = useMemo(() => insights(inRange(entries, today, range)), [entries, today, range])
   const longest = useMemo(() => longestRun(entries, today, rhythm), [entries, today, rhythm])
+  const streak = useMemo(() => computeStreak(entries, today, rhythm).nights, [entries, today, rhythm])
 
   return (
     <div className="flex min-h-full flex-col">
@@ -43,13 +45,16 @@ export function Stats() {
             {[
               { value: data.nights, label: data.nights === 1 ? 'night reflected' : 'nights reflected' },
               { value: data.gratitudes, label: 'good things saved' },
-              { value: longest, label: 'longest streak ever' },
+              { value: streak, label: 'current streak' },
             ].map((s) => (
               <div key={s.label}>
                 <div className="font-serif text-[28px] font-light tabular-nums">{s.value}</div>
                 <div className="text-xs leading-tight text-muted">{s.label}</div>
               </div>
             ))}
+          </div>
+          <div className="mt-4 border-t border-line pt-3 text-center text-sm text-muted">
+            Longest streak ever: <span className="font-semibold text-ink tabular-nums">{longest}</span> {longest === 1 ? 'night' : 'nights'}
           </div>
         </Card>
 
@@ -100,7 +105,7 @@ function Details({ data }: { data: Insights }) {
           <div className="mt-3 flex flex-wrap gap-1.5">
             {data.things.map((t) => (
               <span key={t.word} className="rounded-full bg-surface-2 px-3 py-1 text-sm">
-                {t.word} <span className="text-faint">{t.count}</span>
+                {t.word} <span className="text-muted">{t.count}</span>
               </span>
             ))}
           </div>

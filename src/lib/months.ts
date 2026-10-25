@@ -42,12 +42,13 @@ export function topOf(people: Map<string, number>, limit: number): { name: strin
     .map(([name, count]) => ({ name, count }))
 }
 
-/** Top themes with people's names left out, so "sam" never shows up as a thing. */
+/** Top themes with people's names left out, so "sam" never shows up as a thing. A name that slips through keeps its capital. */
 export function topThings(entries: Entry[], people: Map<string, number>, limit: number): Theme[] {
   const personWords = new Set([...people.keys(), ...LOOSE].map((n) => n.replace(/^my /, '').toLowerCase()))
   return topThemes(entries, limit + 5)
     .filter((t) => !personWords.has(t.word))
     .slice(0, limit)
+    .map((t) => (t.proper ? { ...t, word: t.word[0].toUpperCase() + t.word.slice(1) } : t))
 }
 
 /** A quiet summary of one month's evenings: who and what came up, and the moments kept. */

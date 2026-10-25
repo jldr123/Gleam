@@ -49,7 +49,7 @@ describe('topThemes', () => {
     ]
     expect(topThemes(list)).toEqual([
       { word: 'coffee', count: 3 },
-      { word: 'sam', count: 3 },
+      { word: 'sam', count: 3, proper: true },
     ])
   })
 
